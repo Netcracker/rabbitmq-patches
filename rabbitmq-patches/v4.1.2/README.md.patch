@@ -1,0 +1,10 @@
+diff --git a/README.md b/README.md
+index 1ae2d01ddd..0d63a36f94 100644
+--- a/README.md
++++ b/README.md
+@@ -93,3 +93,5 @@ document explains the open source RabbitMQ support policy adopted by the RabbitM
+ ## Copyright
+ 
+ (c) 2007-2025 Broadcom. All Rights Reserved. The term “Broadcom” refers to Broadcom Inc. and/or its subsidiaries.
++
++Change made to test patches application
