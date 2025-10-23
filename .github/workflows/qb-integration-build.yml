@@ -27,6 +27,11 @@ permissions:
   contents: write
 jobs:
   build-rabbitmq:
+    env:
+      RABBITMQ_TAG: ${{ inputs.rabbitmq-tag }}
+      TAG: ${{ inputs.tag }}
+      DOCKER_LIBRARY_RABBITMQ: ${{ inputs.docker-library-rabbitmq }}
+      FORCE_CREATE: ${{ inputs.forceCreate }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -105,7 +110,7 @@ jobs:
 
       - name: "Build RabbitMQ Docker image (management)"
         run: |
-          cd docker-library-rabbitmq/4.1/alpine/management
+          cd docker-library-rabbitmq/${{ env.DOCKER_LIBRARY_RABBITMQ }}/alpine/management
 
           # заменяем блок wget → COPY
           sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,+15c\
