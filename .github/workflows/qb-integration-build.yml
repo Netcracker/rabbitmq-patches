@@ -126,12 +126,12 @@ jobs:
 
                 docker build \
                 --build-arg RABBITMQ_VERSION=${{ inputs.rabbitmq-tag }} \
-                -t ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} -- push.
+                -t ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} --push .
 
-      - name: "Push base RabbitMQ image"
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          docker push ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }}
+    #   - name: "Push base RabbitMQ image"
+    #     run: |
+    #       echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+    #       docker push ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }}
 
       - name: "Build management RabbitMQ image"
         run: |
