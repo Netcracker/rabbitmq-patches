@@ -104,7 +104,7 @@ jobs:
       - name: "Checkout rabbitmq/rabbitmq-server"
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: master
           repository: "docker-library/rabbitmq"
           path: docker-library-rabbitmq
 
