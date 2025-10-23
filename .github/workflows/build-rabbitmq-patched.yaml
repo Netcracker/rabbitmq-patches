@@ -88,22 +88,29 @@ jobs:
           make package-generic-unix PROJECT_VERSION=${{ env.VERSION }}
         env:
           VERSION: ${{ inputs.rabbitmq-tag }}
-#      - name: "Checkout rabbitmq/rabbitmq-packaging"
-#        uses: actions/checkout@v4
-#        with:
-#          ref: ${{ github.event.inputs.rabbitmq-packaging-version }}
-#          repository: "rabbitmq/rabbitmq-packaging"
-#          path: rappitmq-packaging
-#      - name: "Build RabbitMQ package"
-#        run: |
-#          make package-deb
-#        env:
-#          RABBITMQ_PACKAGING_REPO: ./rabbitmq-packaging
-#      - name: "Upload RabbitMQ build artifacts"
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: rabbitmq-build
-#          path: "rabbitmq-server/ebin/*"
+
+      - name: "Checkout rabbitmq/rabbitmq-server"
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          repository: "docker-library/rabbitmq"
+          path: docker-library-rabbitmq
+
+      - name: "Build Docker image from official Dockerfile"
+        run: |
+          cd docker-library-rabbitmq/4.1/alpine
+
+          sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,+15c\
+          COPY ../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz /tmp/rabbitmq.tar.xz\n\
+          RUN set -eux; \\\n\
+              mkdir -p "$RABBITMQ_HOME"; \\\n\
+              tar --extract --file /tmp/rabbitmq.tar.xz --directory "$RABBITMQ_HOME" --strip-components 1; \\\n\
+              rm /tmp/rabbitmq.tar.xz; \\\n\
+              chown -R rabbitmq:rabbitmq "$RABBITMQ_HOME";' Dockerfile
+
+              docker build \
+                --build-arg RABBITMQ_VERSION=${{ inputs.rabbitmq-tag }} \
+                -t ghcr.io/${{ github.repository_owner }}/rabbitmq:${{ inputs.tag }} .
 
       - name: "Upload assets"
         uses: netcracker/qubership-workflow-hub/actions/assets-action@main
