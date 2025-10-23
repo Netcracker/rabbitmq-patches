@@ -125,9 +125,10 @@ jobs:
           ENV PATH=$RABBITMQ_HOME/sbin:$PATH\n\
           RUN set -eux; \\\n\
               mkdir -p \"$RABBITMQ_HOME\"; \\\n\
-              tar --extract --file /tmp/rabbitmq.tar.xz --directory \"$RABBITMQ_HOME\" --strip-components 1; \\\n\
-              rm /tmp/rabbitmq.tar.xz; \\\n\
-              ls -l \"$RABBITMQ_HOME/sbin\" || (echo \"Not found\"; ls -R /opt; exit 1);' Dockerfile
+              tar --extract --file /tmp/rabbitmq.tar.xz --directory \"$RABBITMQ_HOME\"; \\\n\
+              echo \"=== Extracted files ===\"; \\\n\
+              find \"$RABBITMQ_HOME\" -maxdepth 2 -type d; \\\n\
+              rm /tmp/rabbitmq.tar.xz;' Dockerfile
 
           echo "Check Dockerfile ENV presence:"
           grep "RABBITMQ_HOME" Dockerfile || echo "WARNING: ENV not inserted!"
