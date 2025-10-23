@@ -28,7 +28,7 @@ jobs:
           fetch-depth: 0
 
       - name: Create a New Tag
-        uses: netcracker/qubership-workflow-hub/actions/tag-action@main
+        uses: netcracker/qubership-workflow-hub/actions/tag-action@v2.0.1
         with:
           ref: ${{ github.ref_name }}
           tag-name: ${{ inputs.tag }}
@@ -42,6 +42,7 @@ jobs:
       - name: Cleanup
         run: |
           rm -rf ./*
+
       - name: "Checkout RabbitMQ tag ${{ github.event.inputs.rabbitmq-tag }}"
         uses: actions/checkout@v4
         with:
@@ -62,6 +63,7 @@ jobs:
             git apply -p1 --ignore-space-change --ignore-whitespace "$p"
           done
           rm -rf ./rabbitmq-patches
+
       - name: "Install pre-requisites"
         run: |
           sudo apt-get update
@@ -79,6 +81,7 @@ jobs:
           erlang-parsetools erlang-public-key erlang-runtime-tools erlang-ssl \
           erlang-syntax-tools erlang-tools erlang-xmerl erlang-dev
           sudo snap install libxslt
+
       - name: "Build RabbitMQ"
         run: |
           # make
