@@ -1,0 +1,121 @@
+name: "Integration RabbitMQ"
+run-name: "RabbitMQ version ${{ inputs.rabbitmq-tag }}"
+on:
+  workflow_dispatch:
+    inputs:
+      rabbitmq-tag:
+        description: "RabbitMQ version to build"
+        required: true
+        default: "v4.1.2"
+      tag:
+        description: "Tag to create for accets upload"
+        required: true
+        default: "v4.1.2-patched"
+      forceCreate:
+        type: boolean
+        description: "Override tag name (default: true)"
+        required: false
+        default: true
+permissions:
+  contents: write
+jobs:
+  build-rabbitmq:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create a New Tag
+        uses: netcracker/qubership-workflow-hub/actions/tag-action@v2.0.1
+        with:
+          ref: ${{ github.ref_name }}
+          tag-name: ${{ inputs.tag }}
+          force-create: ${{ inputs.forceCreate }}
+          switch-to-tag: true
+          create-release: true
+          skip-checkout: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup
+        run: |
+          rm -rf ./*
+
+      - name: "Checkout RabbitMQ tag ${{ github.event.inputs.rabbitmq-tag }}"
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.rabbitmq-tag }}
+          repository: "rabbitmq/rabbitmq-server"
+
+      - name: Checkout rabbitmq-patches tag ${{ inputs.tag }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+          path: rabbitmq-patches
+
+      - name: Apply patches
+        run: |
+          cd ${GITHUB_WORKSPACE}
+          for p in ./rabbitmq-patches/rabbitmq-patches/${{ inputs.rabbitmq-tag }}/*.patch; do
+            echo "Applying $p…"
+            git apply -p1 --ignore-space-change --ignore-whitespace "$p"
+          done
+          rm -rf ./rabbitmq-patches
+
+      - name: "Install pre-requisites"
+        run: |
+          sudo apt-get update
+          # Skip installing pacakge docs (makes the man-db trigger much faster)
+          sudo tee /etc/dpkg/dpkg.cfg.d/01_nodoc > /dev/null << 'EOF'
+          path-exclude /usr/share/doc/*
+          path-exclude /usr/share/man/*
+          path-exclude /usr/share/info/*
+          EOF
+          sudo add-apt-repository ppa:rabbitmq/rabbitmq-erlang
+          sudo apt-get update
+          sudo apt-get install -y git elixir erlang erlang-nox erlang-src xmlto \
+          build-essential debhelper erlang-base erlang-crypto erlang-edoc erlang-eldap \
+          erlang-erl-docgen erlang-eunit erlang-inets erlang-mnesia erlang-os-mon \
+          erlang-parsetools erlang-public-key erlang-runtime-tools erlang-ssl \
+          erlang-syntax-tools erlang-tools erlang-xmerl erlang-dev
+          sudo snap install libxslt
+
+      - name: "Build RabbitMQ"
+        run: |
+          # make
+          make package-generic-unix PROJECT_VERSION=${{ env.VERSION }}
+        env:
+          VERSION: ${{ inputs.rabbitmq-tag }}
+
+      - name: "Checkout rabbitmq/rabbitmq-server"
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          repository: "docker-library/rabbitmq"
+          path: docker-library-rabbitmq
+
+      - name: "Build Docker image from official Dockerfile"
+        run: |
+          cd docker-library-rabbitmq/4.1/alpine
+
+          sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,+15c\
+          COPY ../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz /tmp/rabbitmq.tar.xz\n\
+          RUN set -eux; \\\n\
+              mkdir -p "$RABBITMQ_HOME"; \\\n\
+              tar --extract --file /tmp/rabbitmq.tar.xz --directory "$RABBITMQ_HOME" --strip-components 1; \\\n\
+              rm /tmp/rabbitmq.tar.xz; \\\n\
+              chown -R rabbitmq:rabbitmq "$RABBITMQ_HOME";' Dockerfile
+
+              docker build \
+                --build-arg RABBITMQ_VERSION=${{ inputs.rabbitmq-tag }} \
+                -t ghcr.io/${{ github.repository_owner }}/rabbitmq:${{ inputs.tag }} .
+
+      - name: "Upload assets"
+        uses: netcracker/qubership-workflow-hub/actions/assets-action@main
+        with:
+          tag: ${{ inputs.tag }}
+          item-path: PACKAGES/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
