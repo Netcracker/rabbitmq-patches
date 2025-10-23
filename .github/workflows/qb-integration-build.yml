@@ -102,12 +102,16 @@ jobs:
         env:
           VERSION: ${{ inputs.rabbitmq-tag }}
 
-      - name: "Checkout rabbitmq/rabbitmq-server"
+      - name: "Checkout docker-library/rabbitmq"
         uses: actions/checkout@v4
         with:
           ref: master
           repository: "docker-library/rabbitmq"
           path: docker-library-rabbitmq
+
+      - name: "Doker Login"
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: "Build base RabbitMQ image"
         run: |
