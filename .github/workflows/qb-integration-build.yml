@@ -1,5 +1,6 @@
 name: "Integration RabbitMQ"
 run-name: "RabbitMQ version ${{ inputs.rabbitmq-tag }}"
+
 on:
   workflow_dispatch:
     inputs:
@@ -8,13 +9,13 @@ on:
         required: true
         default: "v4.1.2"
       tag:
-        description: "Tag to create for accets upload"
+        description: "Tag to create for assets upload"
         required: true
         default: "v4.1.2-patched"
       docker-library-rabbitmq:
-        description: "Version Images from docker-library/rabbitmq to use"
+        description: "RabbitMQ docker-library version"
         required: true
-        type:  choice
+        type: choice
         options:
           - "4.1"
           - "4.2"
@@ -23,17 +24,20 @@ on:
         description: "Override tag name (default: true)"
         required: false
         default: true
+
 permissions:
   contents: write
   packages: write
+
 jobs:
   build-rabbitmq:
+    runs-on: ubuntu-latest
     env:
       RABBITMQ_TAG: ${{ inputs.rabbitmq-tag }}
       TAG: ${{ inputs.tag }}
       DOCKER_LIBRARY_RABBITMQ: ${{ inputs.docker-library-rabbitmq }}
       FORCE_CREATE: ${{ inputs.forceCreate }}
-    runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -53,16 +57,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cleanup
-        run: |
-          rm -rf ./*
+        run: rm -rf ./*
 
-      - name: "Checkout RabbitMQ tag ${{ github.event.inputs.rabbitmq-tag }}"
+      - name: "Checkout RabbitMQ source"
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.rabbitmq-tag }}
           repository: "rabbitmq/rabbitmq-server"
 
-      - name: Checkout rabbitmq-patches tag ${{ inputs.tag }}
+      - name: Checkout rabbitmq-patches
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
@@ -70,38 +73,39 @@ jobs:
 
       - name: Apply patches
         run: |
-          cd ${GITHUB_WORKSPACE}
           for p in ./rabbitmq-patches/rabbitmq-patches/${{ inputs.rabbitmq-tag }}/*.patch; do
             echo "Applying $p…"
             git apply -p1 --ignore-space-change --ignore-whitespace "$p"
           done
           rm -rf ./rabbitmq-patches
 
-      - name: "Install pre-requisites"
+      - name: Install prerequisites
         run: |
           sudo apt-get update
-          # Skip installing pacakge docs (makes the man-db trigger much faster)
-          sudo tee /etc/dpkg/dpkg.cfg.d/01_nodoc > /dev/null << 'EOF'
+          sudo tee /etc/dpkg/dpkg.cfg.d/01_nodoc > /dev/null <<'EOF'
           path-exclude /usr/share/doc/*
           path-exclude /usr/share/man/*
           path-exclude /usr/share/info/*
           EOF
-          sudo add-apt-repository ppa:rabbitmq/rabbitmq-erlang
+          sudo add-apt-repository ppa:rabbitmq/rabbitmq-erlang -y
           sudo apt-get update
-          sudo apt-get install -y git elixir erlang erlang-nox erlang-src xmlto \
-          build-essential debhelper erlang-base erlang-crypto erlang-edoc erlang-eldap \
-          erlang-erl-docgen erlang-eunit erlang-inets erlang-mnesia erlang-os-mon \
-          erlang-parsetools erlang-public-key erlang-runtime-tools erlang-ssl \
-          erlang-syntax-tools erlang-tools erlang-xmerl erlang-dev
+          sudo apt-get install -y git elixir erlang erlang-nox xmlto \
+            build-essential debhelper erlang-dev
           sudo snap install libxslt
 
-      - name: "Build RabbitMQ"
+      - name: "Build RabbitMQ generic-unix package"
         run: |
-          # make
           make package-generic-unix PROJECT_VERSION=${{ env.VERSION }}
         env:
           VERSION: ${{ inputs.rabbitmq-tag }}
- 
+
+      - name: "Check built packages"
+        run: |
+          echo "=== PACKAGES directory ==="
+          ls -lh PACKAGES
+          echo "=== Inside tarball ==="
+          tar -tf PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz | grep sbin/
+
       - name: "Checkout docker-library/rabbitmq"
         uses: actions/checkout@v4
         with:
@@ -109,60 +113,60 @@ jobs:
           repository: "docker-library/rabbitmq"
           path: docker-library-rabbitmq
 
-      - name: "Check built packages"
+      - name: "Build base RabbitMQ image"
         run: |
-          echo "=== PACKAGES directory ==="
-          ls -lh PACKAGES || true
-          echo "=== Inside tarball ==="
-          tar -tf PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz | grep sbin/ || true
+          cd docker-library-rabbitmq/${{ env.DOCKER_LIBRARY_RABBITMQ }}/alpine
 
-    #   - name: "Doker Login"
-    #     run: |
-    #       echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "Patching Dockerfile to use local RabbitMQ build..."
+          # заменяем блок wget → COPY
+          sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,/grep -qE .SYS_PREFIX=/c\
+          COPY ../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz /tmp/rabbitmq.tar.xz\n\
+          RUN set -eux; \\\n\
+              mkdir -p \"$RABBITMQ_HOME\"; \\\n\
+              tar --extract --file /tmp/rabbitmq.tar.xz --directory \"$RABBITMQ_HOME\" --strip-components 1; \\\n\
+              rm /tmp/rabbitmq.tar.xz;' Dockerfile
 
-    #   - name: "Build base RabbitMQ image"
-    #     run: |
-    #         cd docker-library-rabbitmq/4.1/alpine
-    #         # патчим
-    #         sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,/grep -qE .SYS_PREFIX=/c\
-    #         COPY ../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz /tmp/rabbitmq.tar.xz\n\
-    #         RUN set -eux; \\\n\
-    #             mkdir -p \"$RABBITMQ_HOME\"; \\\n\
-    #             tar --extract --file /tmp/rabbitmq.tar.xz --directory \"$RABBITMQ_HOME\" --strip-components 1; \\\n\
-    #             rm /tmp/rabbitmq.tar.xz;' Dockerfile
+          # вставляем ENV сразу после COPY, чтобы переменные окружения были в образе
+            sed -i '/COPY ..\/..\/..\/PACKAGES\/rabbitmq-server-generic-unix/a\
+            ENV RABBITMQ_HOME=/opt/rabbitmq\n\
+            ENV PATH=$RABBITMQ_HOME/sbin:$PATH' Dockerfile
 
-    #             docker build \
-    #             --build-arg RABBITMQ_VERSION=${{ inputs.rabbitmq-tag }} \
-    #             -t ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} --push .
+          echo "Check Dockerfile ENV presence:"
+          grep "RABBITMQ_HOME" Dockerfile || echo "WARNING: ENV not inserted!"
 
-    #   - name: "Push base RabbitMQ image"
-    #     run: |
-    #       echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-    #       docker push ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }}
+          docker build \
+            --build-arg RABBITMQ_VERSION=${{ inputs.rabbitmq-tag }} \
+            -t ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} .
 
-    #   - name: "Build management RabbitMQ image"
-    #     run: |
-    #         cd docker-library-rabbitmq/4.1/alpine/management
-    #         sed -i 's|^FROM rabbitmq:4.1-alpine|FROM ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }}|' Dockerfile
+      - name: Verify base image
+        run: |
+          docker run --rm ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} ls -l /opt/rabbitmq/sbin
 
-    #         docker build \
-    #         -t ghcr.io/${{ github.repository_owner }}/rabbitmq:${{ inputs.tag }}-management .
+      - name: "Login to GHCR"
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-        # cd docker-library-rabbitmq/4.1/alpine
+      - name: "Push base image"
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }}
 
-        # # заменяем скачивание RabbitMQ → на копирование своего архива
-        # sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,+15c\
-        # COPY ../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz /tmp/rabbitmq.tar.xz\n\
-        # RUN set -eux; \\\n\
-        #     mkdir -p "$RABBITMQ_HOME"; \\\n\
-        #     tar --extract --file /tmp/rabbitmq.tar.xz --directory "$RABBITMQ_HOME" --strip-components 1; \\\n\
-        #     rm /tmp/rabbitmq.tar.xz; \\\n\
-        #     chown -R rabbitmq:rabbitmq "$RABBITMQ_HOME";' Dockerfile
+      - name: "Build management RabbitMQ image"
+        run: |
+          cd docker-library-rabbitmq/${{ env.DOCKER_LIBRARY_RABBITMQ }}/alpine/management
+          sed -i 's|^FROM rabbitmq:.*|FROM ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }}|' Dockerfile
+          docker build -t ghcr.io/${{ github.repository_owner }}/rabbitmq:${{ inputs.tag }}-management .
 
-    #   - name: "Upload assets"
-    #     uses: netcracker/qubership-workflow-hub/actions/assets-action@main
-    #     with:
-    #       tag: ${{ inputs.tag }}
-    #       item-path: PACKAGES/*
-    #     env:
-    #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: "Push management image"
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/rabbitmq:${{ inputs.tag }}-management
+
+      - name: "Upload assets"
+        uses: netcracker/qubership-workflow-hub/actions/assets-action@main
+        with:
+          tag: ${{ inputs.tag }}
+          item-path: PACKAGES/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
