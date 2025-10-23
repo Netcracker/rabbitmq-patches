@@ -112,13 +112,12 @@ jobs:
         run: |
             cd docker-library-rabbitmq/4.1/alpine
             # патчим
-            sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,+15c\
+            sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,/grep -qE .SYS_PREFIX=/c\
             COPY ../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz /tmp/rabbitmq.tar.xz\n\
             RUN set -eux; \\\n\
-                mkdir -p "$RABBITMQ_HOME"; \\\n\
-                tar --extract --file /tmp/rabbitmq.tar.xz --directory "$RABBITMQ_HOME" --strip-components 1; \\\n\
-                rm /tmp/rabbitmq.tar.xz; \\\n\
-                chown -R rabbitmq:rabbitmq "$RABBITMQ_HOME";' Dockerfile
+                mkdir -p \"$RABBITMQ_HOME\"; \\\n\
+                tar --extract --file /tmp/rabbitmq.tar.xz --directory \"$RABBITMQ_HOME\" --strip-components 1; \\\n\
+                rm /tmp/rabbitmq.tar.xz;' Dockerfile
 
                 docker build \
                 --build-arg RABBITMQ_VERSION=${{ inputs.rabbitmq-tag }} \
