@@ -108,22 +108,40 @@ jobs:
           repository: "docker-library/rabbitmq"
           path: docker-library-rabbitmq
 
-      - name: "Build RabbitMQ Docker image (management)"
+      - name: "Build base RabbitMQ image"
         run: |
-          cd docker-library-rabbitmq/${{ env.DOCKER_LIBRARY_RABBITMQ }}/alpine/management
+            cd docker-library-rabbitmq/4.1/alpine
+            # патчим
+            sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,+15c\
+            COPY ../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz /tmp/rabbitmq.tar.xz\n\
+            RUN set -eux; \\\n\
+                mkdir -p "$RABBITMQ_HOME"; \\\n\
+                tar --extract --file /tmp/rabbitmq.tar.xz --directory "$RABBITMQ_HOME" --strip-components 1; \\\n\
+                rm /tmp/rabbitmq.tar.xz; \\\n\
+                chown -R rabbitmq:rabbitmq "$RABBITMQ_HOME";' Dockerfile
 
-          # заменяем блок wget → COPY
-          sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,+15c\
-          COPY ../../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz /tmp/rabbitmq.tar.xz\n\
-          RUN set -eux; \\\n\
-              mkdir -p "$RABBITMQ_HOME"; \\\n\
-              tar --extract --file /tmp/rabbitmq.tar.xz --directory "$RABBITMQ_HOME" --strip-components 1; \\\n\
-              rm /tmp/rabbitmq.tar.xz; \\\n\
-              chown -R rabbitmq:rabbitmq "$RABBITMQ_HOME";' Dockerfile
+                docker build \
+                --build-arg RABBITMQ_VERSION=${{ inputs.rabbitmq-tag }} \
+                -t ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} .
 
-              docker build \
-              --build-arg RABBITMQ_VERSION=${{ inputs.rabbitmq-tag }} \
-              -t ghcr.io/${{ github.repository_owner }}/rabbitmq:${{ inputs.tag }} .
+      - name: "Build management RabbitMQ image"
+        run: |
+            cd docker-library-rabbitmq/4.1/alpine/management
+            sed -i 's|^FROM rabbitmq:4.1-alpine|FROM ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }}|' Dockerfile
+
+            docker build \
+            -t ghcr.io/${{ github.repository_owner }}/rabbitmq:${{ inputs.tag }}-management .
+
+        # cd docker-library-rabbitmq/4.1/alpine
+
+        # # заменяем скачивание RabbitMQ → на копирование своего архива
+        # sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,+15c\
+        # COPY ../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz /tmp/rabbitmq.tar.xz\n\
+        # RUN set -eux; \\\n\
+        #     mkdir -p "$RABBITMQ_HOME"; \\\n\
+        #     tar --extract --file /tmp/rabbitmq.tar.xz --directory "$RABBITMQ_HOME" --strip-components 1; \\\n\
+        #     rm /tmp/rabbitmq.tar.xz; \\\n\
+        #     chown -R rabbitmq:rabbitmq "$RABBITMQ_HOME";' Dockerfile
 
       - name: "Upload assets"
         uses: netcracker/qubership-workflow-hub/actions/assets-action@main
