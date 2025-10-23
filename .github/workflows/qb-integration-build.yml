@@ -101,7 +101,7 @@ jobs:
           make package-generic-unix PROJECT_VERSION=${{ env.VERSION }}
         env:
           VERSION: ${{ inputs.rabbitmq-tag }}
-
+ 
       - name: "Checkout docker-library/rabbitmq"
         uses: actions/checkout@v4
         with:
@@ -109,37 +109,44 @@ jobs:
           repository: "docker-library/rabbitmq"
           path: docker-library-rabbitmq
 
-      - name: "Doker Login"
+      - name: "Check built packages"
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "=== PACKAGES directory ==="
+          ls -lh PACKAGES || true
+          echo "=== Inside tarball ==="
+          tar -tf PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz | grep sbin/ || true
 
-      - name: "Build base RabbitMQ image"
-        run: |
-            cd docker-library-rabbitmq/4.1/alpine
-            # патчим
-            sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,/grep -qE .SYS_PREFIX=/c\
-            COPY ../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz /tmp/rabbitmq.tar.xz\n\
-            RUN set -eux; \\\n\
-                mkdir -p \"$RABBITMQ_HOME\"; \\\n\
-                tar --extract --file /tmp/rabbitmq.tar.xz --directory \"$RABBITMQ_HOME\" --strip-components 1; \\\n\
-                rm /tmp/rabbitmq.tar.xz;' Dockerfile
+    #   - name: "Doker Login"
+    #     run: |
+    #       echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-                docker build \
-                --build-arg RABBITMQ_VERSION=${{ inputs.rabbitmq-tag }} \
-                -t ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} --push .
+    #   - name: "Build base RabbitMQ image"
+    #     run: |
+    #         cd docker-library-rabbitmq/4.1/alpine
+    #         # патчим
+    #         sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,/grep -qE .SYS_PREFIX=/c\
+    #         COPY ../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz /tmp/rabbitmq.tar.xz\n\
+    #         RUN set -eux; \\\n\
+    #             mkdir -p \"$RABBITMQ_HOME\"; \\\n\
+    #             tar --extract --file /tmp/rabbitmq.tar.xz --directory \"$RABBITMQ_HOME\" --strip-components 1; \\\n\
+    #             rm /tmp/rabbitmq.tar.xz;' Dockerfile
+
+    #             docker build \
+    #             --build-arg RABBITMQ_VERSION=${{ inputs.rabbitmq-tag }} \
+    #             -t ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} --push .
 
     #   - name: "Push base RabbitMQ image"
     #     run: |
     #       echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
     #       docker push ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }}
 
-      - name: "Build management RabbitMQ image"
-        run: |
-            cd docker-library-rabbitmq/4.1/alpine/management
-            sed -i 's|^FROM rabbitmq:4.1-alpine|FROM ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }}|' Dockerfile
+    #   - name: "Build management RabbitMQ image"
+    #     run: |
+    #         cd docker-library-rabbitmq/4.1/alpine/management
+    #         sed -i 's|^FROM rabbitmq:4.1-alpine|FROM ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }}|' Dockerfile
 
-            docker build \
-            -t ghcr.io/${{ github.repository_owner }}/rabbitmq:${{ inputs.tag }}-management .
+    #         docker build \
+    #         -t ghcr.io/${{ github.repository_owner }}/rabbitmq:${{ inputs.tag }}-management .
 
         # cd docker-library-rabbitmq/4.1/alpine
 
@@ -152,10 +159,10 @@ jobs:
         #     rm /tmp/rabbitmq.tar.xz; \\\n\
         #     chown -R rabbitmq:rabbitmq "$RABBITMQ_HOME";' Dockerfile
 
-      - name: "Upload assets"
-        uses: netcracker/qubership-workflow-hub/actions/assets-action@main
-        with:
-          tag: ${{ inputs.tag }}
-          item-path: PACKAGES/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    #   - name: "Upload assets"
+    #     uses: netcracker/qubership-workflow-hub/actions/assets-action@main
+    #     with:
+    #       tag: ${{ inputs.tag }}
+    #       item-path: PACKAGES/*
+    #     env:
+    #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
