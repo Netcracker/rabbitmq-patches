@@ -81,29 +81,29 @@ jobs:
           done
           rm -rf ./rabbitmq-patches
 
-      - name: Install build prerequisites
-        run: |
-          sudo apt-get update
-          sudo tee /etc/dpkg/dpkg.cfg.d/01_nodoc > /dev/null <<'EOF'
-          path-exclude /usr/share/doc/*
-          path-exclude /usr/share/man/*
-          path-exclude /usr/share/info/*
-          EOF
-          sudo add-apt-repository ppa:rabbitmq/rabbitmq-erlang -y
-          sudo apt-get update
-          sudo apt-get install -y git elixir erlang erlang-nox xmlto \
-            build-essential debhelper erlang-dev
-          sudo snap install libxslt
+      # - name: Install build prerequisites
+      #   run: |
+      #     sudo apt-get update
+      #     sudo tee /etc/dpkg/dpkg.cfg.d/01_nodoc > /dev/null <<'EOF'
+      #     path-exclude /usr/share/doc/*
+      #     path-exclude /usr/share/man/*
+      #     path-exclude /usr/share/info/*
+      #     EOF
+      #     sudo add-apt-repository ppa:rabbitmq/rabbitmq-erlang -y
+      #     sudo apt-get update
+      #     sudo apt-get install -y git elixir erlang erlang-nox xmlto \
+      #       build-essential debhelper erlang-dev
+      #     sudo snap install libxslt
 
-      - name: Build RabbitMQ generic-unix package
-        run: make package-generic-unix PROJECT_VERSION=${{ inputs.rabbitmq-tag }}
+      # - name: Build RabbitMQ generic-unix package
+      #   run: make package-generic-unix PROJECT_VERSION=${{ inputs.rabbitmq-tag }}
 
-      - name: Verify built package
-        run: |
-          echo "=== PACKAGES directory ==="
-          ls -lh PACKAGES
-          echo "=== TAR content ==="
-          tar -tf PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz | grep sbin/ || echo "No sbin found"
+      # - name: Verify built package
+      #   run: |
+      #     echo "=== PACKAGES directory ==="
+      #     ls -lh PACKAGES
+      #     echo "=== TAR content ==="
+      #     tar -tf PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz | grep sbin/ || echo "No sbin found"
 
       # --- Dockerfile генерация и патчинг ---
       - name: Checkout docker-library/rabbitmq
@@ -163,51 +163,51 @@ jobs:
           cat docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management/Dockerfile
           echo "::endgroup::"
 
-      - name: Prepare build context
-        run: |
-          cp PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/
+      # - name: Prepare build context
+      #   run: |
+      #     cp PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/
 
-      # --- Сборка Docker-образов ---
-      - name: Build base Docker image
-        run: |
-          cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine
-          docker build \
-            --build-arg RABBITMQ_SOURCE_URL="./rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz" \
-            -t $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }} .
+      # # --- Сборка Docker-образов ---
+      # - name: Build base Docker image
+      #   run: |
+      #     cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine
+      #     docker build \
+      #       --build-arg RABBITMQ_SOURCE_URL="./rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz" \
+      #       -t $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }} .
 
-      - name: Build management Docker image
-        run: |
-          cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management
-          docker build \
-            --build-arg BASE_IMAGE=$IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }} \
-            -t $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }} .
+      # - name: Build management Docker image
+      #   run: |
+      #     cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management
+      #     docker build \
+      #       --build-arg BASE_IMAGE=$IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }} \
+      #       -t $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }} .
 
-      # --- Проверка образов ---
-      - name: Test RabbitMQ base image
-        run: |
-          docker run -d --rm --name test-rabbit -p 5672:5672 $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }}
-          sleep 15
-          docker logs test-rabbit | grep "Server startup complete"
-          docker exec test-rabbit rabbitmqctl status
-          docker stop test-rabbit
+      # # --- Проверка образов ---
+      # - name: Test RabbitMQ base image
+      #   run: |
+      #     docker run -d --rm --name test-rabbit -p 5672:5672 $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }}
+      #     sleep 15
+      #     docker logs test-rabbit | grep "Server startup complete"
+      #     docker exec test-rabbit rabbitmqctl status
+      #     docker stop test-rabbit
 
-      - name: Test RabbitMQ management image
-        run: |
-          docker run -d --rm --name test-rabbit-mgmt -p 15672:15672 $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }}
-          sleep 15
-          docker logs test-rabbit-mgmt | grep "Server startup complete"
-          docker exec test-rabbit-mgmt rabbitmq-plugins list -E | grep rabbitmq_management
-          docker stop test-rabbit-mgmt
+      # - name: Test RabbitMQ management image
+      #   run: |
+      #     docker run -d --rm --name test-rabbit-mgmt -p 15672:15672 $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }}
+      #     sleep 15
+      #     docker logs test-rabbit-mgmt | grep "Server startup complete"
+      #     docker exec test-rabbit-mgmt rabbitmq-plugins list -E | grep rabbitmq_management
+      #     docker stop test-rabbit-mgmt
 
-      # --- Публикация ---
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      # # --- Публикация ---
+      # - name: Log in to GHCR
+      #   uses: docker/login-action@v3
+      #   with:
+      #     registry: ghcr.io
+      #     username: ${{ github.actor }}
+      #     password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push Docker images
-        run: |
-          docker push $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }}
-          docker push $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }}
+      # - name: Push Docker images
+      #   run: |
+      #     docker push $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }}
+      #     docker push $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }}
