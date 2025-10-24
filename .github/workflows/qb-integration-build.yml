@@ -156,7 +156,7 @@ jobs:
         run: |
           file="docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management/Dockerfile"
           sed -i '1iARG BASE_IMAGE=""' "$file"
-          sed -i 's|^FROM rabbitmq:|FROM ${BASE_IMAGE:-rabbitmq:|' "$file"
+          sed -i 's|^FROM rabbitmq:\(.*\)|FROM ${BASE_IMAGE:-rabbitmq:\1}|' "$file"
 
       - name: Check management Dockerfile FROM line
         run: grep -m1 '^FROM' docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management/Dockerfile
