@@ -120,6 +120,14 @@ jobs:
           cd docker-library-rabbitmq/${{ env.DOCKER_LIBRARY_RABBITMQ }}/alpine
 
           echo "Patching Dockerfile to use local RabbitMQ build..."
+
+          echo "=== Original Dockerfile section ==="
+          grep -A 15 -B 5 "wget.*RABBITMQ_PATH" Dockerfile || echo "wget pattern not found"
+          
+          echo "=== Looking for sed pattern ==="
+          grep -n "wget --output-document.*RABBITMQ_PATH.tar.xz.asc" Dockerfile || echo "asc pattern not found"
+          grep -n "grep -qE.*SYS_PREFIX" Dockerfile || echo "SYS_PREFIX pattern not found"
+
           # заменяем блок wget → COPY и добавляем ENV сразу туда же
           sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,/grep -qE .SYS_PREFIX=/c\
           COPY ../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz /tmp/rabbitmq.tar.xz\n\
@@ -128,6 +136,7 @@ jobs:
           RUN set -eux; \\\n\
               mkdir -p \"$RABBITMQ_HOME\"; \\\n\
               tar --extract --file /tmp/rabbitmq.tar.xz --directory \"$RABBITMQ_HOME\" --strip-components 1; \\\n\
+
               echo \"=== Extracted files ===\"; \\\n\
               find \"$RABBITMQ_HOME\" -maxdepth 2 -type d; \\\n\
               rm /tmp/rabbitmq.tar.xz;' Dockerfile
@@ -143,6 +152,7 @@ jobs:
             -t ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} .
 
           echo "=== Testing container file structure ==="
+          docker run --rm ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} whoami || echo "Container failed"
           docker run --rm ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} find /opt -type d -maxdepth 3 2>/dev/null || echo "No /opt directory"
           docker run --rm ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} ls -la /opt/ 2>/dev/null || echo "Cannot list /opt"
           docker run --rm ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} ls -l /opt/rabbitmq/sbin 2>/dev/null || echo "No /opt/rabbitmq/sbin"
