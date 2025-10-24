@@ -112,11 +112,10 @@ jobs:
 
       - name: Generate Dockerfile from template
         run: |
-          cd docker-library-rabbitmq
-          mkdir -p $DOCKER_LIBRARY_RABBITMQ/alpine
-          cp Dockerfile-alpine.template $DOCKER_LIBRARY_RABBITMQ/alpine/Dockerfile
+          cd docker-library-rabbitmq/${{ env.DOCKER_LIBRARY_RABBITMQ }}/alpine
 
-          cd $DOCKER_LIBRARY_RABBITMQ/alpine
+          echo "=== Original Dockerfile content ==="
+          head -10 Dockerfile
 
           # Вставляем COPY вместо wget
           sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,/grep -qE .SYS_PREFIX=/c\
