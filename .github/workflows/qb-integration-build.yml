@@ -142,8 +142,15 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::🧩 Patching Dockerfile-management.template"
-          sed -i '1iARG BASE_IMAGE=""' Dockerfile-management.template
-          sed -z -E 's|FROM[[:space:]]+\{\{[^\}]+\}\}\n?|ARG BASE_IMAGE=""\nFROM ${BASE_IMAGE:-{{"rabbitmq:" + env.version + (env.variant == "alpine" ? "-alpine" : "")}}}\n|' Dockerfile-management.template
+          awk '
+            /^FROM[[:space:]]+\{\{$/ {
+              print "ARG BASE_IMAGE=\"\"";
+              print "FROM ${BASE_IMAGE:-{{\"rabbitmq:\" + env.version + (env.variant == \"alpine\" ? \"-alpine\" : \"\")}}}";
+              skip=1; next
+            }
+            skip && /^\}\}/ { skip=0; next }
+            !skip { print }
+          ' Dockerfile-management.template > tmp && mv tmp Dockerfile-management.template
           echo "::endgroup::"
 
       - name: Generate Dockerfiles
