@@ -119,22 +119,25 @@ jobs:
           cd docker-library
           echo "::group::🧩 Patching Dockerfile-alpine.template"
 
-          # Добавляем аргумент для локального источника
+          # Добавляем ARG для локального источника
           sed -i '/# Use the latest stable RabbitMQ release/a ARG RABBITMQ_SOURCE_URL=""' Dockerfile-alpine.template
 
-          # Вставляем условие для локального пакета
+          # Вставляем условие для локального пакета, но только внутри секции RabbitMQ
           awk '
-            /wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/ {
+            BEGIN {in_rmq=0}
+            /# Use the latest stable RabbitMQ release/ {in_rmq=1}
+            in_rmq && /wget --output-document "\$RABBITMQ_PATH\.tar\.xz\.asc"/ {
               print "if [ -f \"$RABBITMQ_SOURCE_URL\" ]; then \\"
               print "  echo \"Using local RabbitMQ package: $RABBITMQ_SOURCE_URL\"; \\"
               print "  cp \"$RABBITMQ_SOURCE_URL\" \"$RABBITMQ_PATH.tar.xz\"; \\"
               print "else \\"
             }
-            { print }
-            /rm -rf "\$GNUPGHOME"; \\/ {
+            {print}
+            in_rmq && /rm -rf "\$GNUPGHOME"; \\/ {
               print "fi; \\"
+              in_rmq=0
             }
-          ' Dockerfile-alpine.template > tmpfile && mv tmpfile Dockerfile-alpine.template
+          ' Dockerfile-alpine.template > tmp && mv tmp Dockerfile-alpine.template
 
           echo "::endgroup::"
 
