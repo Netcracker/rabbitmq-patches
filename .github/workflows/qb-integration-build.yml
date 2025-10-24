@@ -141,16 +141,22 @@ jobs:
 
           echo "::endgroup::"
 
-          echo "::group::🧩 Patching Dockerfile-management.template"
-          sed -i '1iARG BASE_IMAGE=""' Dockerfile-management.template
-          sed -E -i 's|^[[:space:]]*FROM[[:space:]]+(\{\{.*\}\})|FROM ${BASE_IMAGE:-\1}|' Dockerfile-management.template
-          echo "::endgroup::"
+          # echo "::group::🧩 Patching Dockerfile-management.template"
+          # sed -i '1iARG BASE_IMAGE=""' Dockerfile-management.template
+          # sed -E -i 's|^[[:space:]]*FROM[[:space:]]+(\{\{.*\}\})|FROM ${BASE_IMAGE:-\1}|' Dockerfile-management.template
+          # echo "::endgroup::"
 
       - name: Generate Dockerfiles
         run: |
           cd docker-library
           ./versions.sh
           ./apply-templates.sh ${{ inputs.docker-library-rabbitmq }}
+
+      - name: Inject BASE_IMAGE into generated management Dockerfile
+        run: |
+          file="docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management/Dockerfile"
+          sed -i '1iARG BASE_IMAGE=""' "$file"
+          sed -i 's|^FROM rabbitmq:|FROM ${BASE_IMAGE:-rabbitmq:|' "$file"
 
       - name: Check management Dockerfile FROM line
         run: grep -m1 '^FROM' docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management/Dockerfile
