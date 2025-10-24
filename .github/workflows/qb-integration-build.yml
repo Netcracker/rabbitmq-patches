@@ -116,15 +116,12 @@ jobs:
       - name: Patch docker-library templates
         run: |
           cd docker-library
-
           echo "::group::🧩 Patching Dockerfile-alpine.template"
-          # Добавляем поддержку локального RABBITMQ_SOURCE_URL
           sed -i '/# Use the latest stable RabbitMQ release/a ARG RABBITMQ_SOURCE_URL=""' Dockerfile-alpine.template
           sed -i 's|RABBITMQ_SOURCE_URL="https://github.com/rabbitmq/rabbitmq-server/releases/download/v\$RABBITMQ_VERSION/rabbitmq-server-generic-unix-latest-toolchain-\$RABBITMQ_VERSION.tar.xz"|if [ -z "\$RABBITMQ_SOURCE_URL" ]; then RABBITMQ_SOURCE_URL="https://github.com/rabbitmq/rabbitmq-server/releases/download/v\$RABBITMQ_VERSION/rabbitmq-server-generic-unix-latest-toolchain-\$RABBITMQ_VERSION.tar.xz"; fi|' Dockerfile-alpine.template
           echo "::endgroup::"
 
           echo "::group::🧩 Patching Dockerfile-management.template"
-          # Добавляем ARG BASE_IMAGE и FROM с подстановкой
           sed -i '1iARG BASE_IMAGE=""' Dockerfile-management.template
           sed -i 's|FROM {{|FROM \${BASE_IMAGE:-rabbitmq:{{|' Dockerfile-management.template
           echo "::endgroup::"
@@ -167,7 +164,7 @@ jobs:
       # --- Проверка образов ---
       - name: Test RabbitMQ base image
         run: |
-          docker run -d --rm --name test-rabbit -p 5672:5672 ghcr.io/${{ github.repository }}/rabbitmq:${{ inputs.tag }}
+          docker run -d --rm --name test-rabbit -p 5672:5672 $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }}
           sleep 15
           docker logs test-rabbit | grep "Server startup complete"
           docker exec test-rabbit rabbitmqctl status
@@ -175,7 +172,7 @@ jobs:
 
       - name: Test RabbitMQ management image
         run: |
-          docker run -d --rm --name test-rabbit-mgmt -p 15672:15672 ghcr.io/${{ github.repository }}/rabbitmq-management:${{ inputs.tag }}
+          docker run -d --rm --name test-rabbit-mgmt -p 15672:15672 $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }}
           sleep 15
           docker logs test-rabbit-mgmt | grep "Server startup complete"
           docker exec test-rabbit-mgmt rabbitmq-plugins list -E | grep rabbitmq_management
