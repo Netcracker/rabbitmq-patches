@@ -143,7 +143,7 @@ jobs:
           # Добавляем ENV переменные в начало файла
           sed -i '1i ENV RABBITMQ_HOME=/opt/rabbitmq' Dockerfile
           sed -i '2i ENV PATH=$RABBITMQ_HOME/sbin:$PATH' Dockerfile
-          
+
           echo "Check Dockerfile ENV presence:"
           grep "RABBITMQ_HOME" Dockerfile || echo "WARNING: ENV not inserted!"
 
