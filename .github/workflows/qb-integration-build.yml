@@ -37,6 +37,7 @@ jobs:
       DOCKER_LIBRARY_RABBITMQ: ${{ inputs.docker-library-rabbitmq }}
 
     steps:
+      # --- исходники RabbitMQ ---
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -92,9 +93,7 @@ jobs:
           sudo snap install libxslt
 
       - name: Build RabbitMQ generic-unix package
-        run: make package-generic-unix PROJECT_VERSION=${{ env.VERSION }}
-        env:
-          VERSION: ${{ inputs.rabbitmq-tag }}
+        run: make package-generic-unix PROJECT_VERSION=${{ inputs.rabbitmq-tag }}
 
       - name: Verify built package
         run: |
@@ -103,8 +102,7 @@ jobs:
           echo "=== TAR content ==="
           tar -tf PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz | grep sbin/ || echo "No sbin found"
 
-      # 👇 Новый блок — Docker build
-
+      # --- Dockerfile генерация и сборка ---
       - name: Checkout docker-library/rabbitmq
         uses: actions/checkout@v4
         with:
@@ -117,26 +115,63 @@ jobs:
           cd docker-library
           ./versions.sh
           ./apply-templates.sh ${{ inputs.docker-library-rabbitmq }}
+          # патчим management шаблон, чтобы поддерживал BASE_IMAGE
+          sed -i '1iARG BASE_IMAGE=""' Dockerfile-management.template
+          sed -i '2iFROM ${BASE_IMAGE:-rabbitmq:${{ inputs.docker-library-rabbitmq }}-alpine}' Dockerfile-management.template
+
+      - name: Show only modified Dockerfiles
+        run: |
+          cd docker-library
+          git diff --unified=0 --no-color | tee /tmp/dockerfile_changes.diff
+          echo "::group::🐋 Dockerfile changes"
+          cat /tmp/dockerfile_changes.diff
+          echo "::endgroup::"
 
       - name: Prepare build context
         run: |
           cp PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/
-          cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine
-          ls -lh
 
-      - name: Build Docker image
+      - name: Build base Docker image
         run: |
           cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine
           docker build \
             --build-arg RABBITMQ_SOURCE_URL="./rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz" \
             -t ghcr.io/${{ github.repository }}/rabbitmq:${{ inputs.tag }} .
 
-      - name: Push Docker image
+      # --- Management образ ---
+      - name: Build management Docker image
+        run: |
+          cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management
+          docker build \
+            --build-arg BASE_IMAGE=ghcr.io/${{ github.repository }}/rabbitmq:${{ inputs.tag }} \
+            -t ghcr.io/${{ github.repository }}/rabbitmq-management:${{ inputs.tag }} .
+
+      # --- Проверка образов ---
+      - name: Test RabbitMQ base image
+        run: |
+          docker run -d --rm --name test-rabbit -p 5672:5672 ghcr.io/${{ github.repository }}/rabbitmq:${{ inputs.tag }}
+          sleep 15
+          docker logs test-rabbit | grep "Server startup complete"
+          docker exec test-rabbit rabbitmqctl status
+          docker stop test-rabbit
+
+      - name: Test RabbitMQ management image
+        run: |
+          docker run -d --rm --name test-rabbit-mgmt -p 15672:15672 ghcr.io/${{ github.repository }}/rabbitmq-management:${{ inputs.tag }}
+          sleep 15
+          docker logs test-rabbit-mgmt | grep "Server startup complete"
+          docker exec test-rabbit-mgmt rabbitmq-plugins list -E | grep rabbitmq_management
+          docker stop test-rabbit-mgmt
+
+      # --- Публикация ---
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push image to GHCR
-        run: docker push ghcr.io/${{ github.repository }}/rabbitmq:${{ inputs.tag }}
+      - name: Push Docker images
+        run: |
+          docker push ghcr.io/${{ github.repository }}/rabbitmq:${{ inputs.tag }}
+          docker push ghcr.io/${{ github.repository }}/rabbitmq-management:${{ inputs.tag }}
