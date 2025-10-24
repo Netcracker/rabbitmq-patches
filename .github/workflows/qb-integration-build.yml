@@ -104,7 +104,9 @@ jobs:
           echo "=== PACKAGES directory ==="
           ls -lh PACKAGES
           echo "=== Inside tarball ==="
-          tar -tf PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz | grep sbin/
+          tar -tf PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz | head -20
+          echo "=== Looking for sbin ==="
+          tar -tf PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz | grep sbin/ || echo "No sbin found"
 
       - name: "Checkout docker-library/rabbitmq"
         uses: actions/checkout@v4
@@ -125,7 +127,7 @@ jobs:
           ENV PATH=$RABBITMQ_HOME/sbin:$PATH\n\
           RUN set -eux; \\\n\
               mkdir -p \"$RABBITMQ_HOME\"; \\\n\
-              tar --extract --file /tmp/rabbitmq.tar.xz --directory \"$RABBITMQ_HOME\"; \\\n\
+              tar --extract --file /tmp/rabbitmq.tar.xz --directory \"$RABBITMQ_HOME\" --strip-components 1; \\\n\
               echo \"=== Extracted files ===\"; \\\n\
               find \"$RABBITMQ_HOME\" -maxdepth 2 -type d; \\\n\
               rm /tmp/rabbitmq.tar.xz;' Dockerfile
@@ -133,11 +135,17 @@ jobs:
           echo "Check Dockerfile ENV presence:"
           grep "RABBITMQ_HOME" Dockerfile || echo "WARNING: ENV not inserted!"
 
+          echo "=== Modified Dockerfile section ==="
+          grep -A 10 -B 5 "COPY.*rabbitmq-server-generic-unix" Dockerfile || echo "COPY line not found"
+
           docker build \
             --build-arg RABBITMQ_VERSION=${{ inputs.rabbitmq-tag }} \
             -t ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} .
 
-          docker run --rm ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} ls -l /opt/rabbitmq/sbin || true
+          echo "=== Testing container file structure ==="
+          docker run --rm ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} find /opt -type d -maxdepth 3 2>/dev/null || echo "No /opt directory"
+          docker run --rm ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} ls -la /opt/ 2>/dev/null || echo "Cannot list /opt"
+          docker run --rm ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} ls -l /opt/rabbitmq/sbin 2>/dev/null || echo "No /opt/rabbitmq/sbin"
 
       - name: Verify base image
         run: |
