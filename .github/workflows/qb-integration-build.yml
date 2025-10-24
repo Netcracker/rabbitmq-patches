@@ -117,19 +117,24 @@ jobs:
           echo "=== Original Dockerfile content ==="
           head -10 Dockerfile
 
-          # Вставляем COPY вместо wget
-          sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,/grep -qE .SYS_PREFIX=/c\
-          COPY ../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz /tmp/rabbitmq.tar.xz\n\
-          ENV RABBITMQ_HOME=/opt/rabbitmq\n\
-          ENV PATH=$RABBITMQ_HOME/sbin:$PATH\n\
-          RUN set -eux; \\\n\
-              mkdir -p \"$RABBITMQ_HOME\"; \\\n\
-              tar --extract --file /tmp/rabbitmq.tar.xz --directory \"$RABBITMQ_HOME\" --strip-components 1; \\\n\
-              ls -l \"$RABBITMQ_HOME\"; \\\n\
-              rm /tmp/rabbitmq.tar.xz;' Dockerfile
+          echo "=== Looking for RabbitMQ installation section ==="
+          grep -A 20 -B 5 "rabbitmq-server-generic-unix" Dockerfile || echo "No generic-unix found"
+
+          # Заменяем секцию скачивания RabbitMQ на использование локального файла
+          sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,/chown -R rabbitmq:rabbitmq "\$RABBITMQ_HOME"/c\
+          COPY ../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz "$RABBITMQ_PATH.tar.xz"; \\\n\
+          \\\n\
+          mkdir -p "$RABBITMQ_HOME"; \\\n\
+          tar --extract --file "$RABBITMQ_PATH.tar.xz" --directory "$RABBITMQ_HOME" --strip-components 1; \\\n\
+          rm -rf "$RABBITMQ_PATH"*; \\\n\
+          # Do not default SYS_PREFIX to RABBITMQ_HOME, leave it empty \\\n\
+          grep -qE "^SYS_PREFIX=\\$\\{RABBITMQ_HOME\\}$" "$RABBITMQ_HOME/sbin/rabbitmq-defaults"; \\\n\
+          sed -i "s/^SYS_PREFIX=.*$/SYS_PREFIX=/" "$RABBITMQ_HOME/sbin/rabbitmq-defaults"; \\\n\
+          grep -qE "^SYS_PREFIX=$" "$RABBITMQ_HOME/sbin/rabbitmq-defaults"; \\\n\
+          chown -R rabbitmq:rabbitmq "$RABBITMQ_HOME";' Dockerfile
 
           echo "✅ Generated Dockerfile section:"
-          grep -A 10 -B 5 "COPY.*rabbitmq-server-generic-unix" Dockerfile || echo "COPY not found"
+          grep -A 15 -B 5 "COPY.*rabbitmq-server-generic-unix" Dockerfile || echo "COPY not found"
 
       - name: Build base RabbitMQ image
         run: |
