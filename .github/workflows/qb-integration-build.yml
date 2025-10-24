@@ -123,19 +123,19 @@ jobs:
 
           # Вставляем логику: если файл локальный — не качаем и не проверяем подпись
           sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/i \
-          if [ -f "$RABBITMQ_SOURCE_URL" ]; then \
-            echo "Using local RabbitMQ package: $RABBITMQ_SOURCE_URL"; \
-            cp "$RABBITMQ_SOURCE_URL" "$RABBITMQ_PATH.tar.xz"; \
-          else' Dockerfile-alpine.template
+          if [ -f "\$RABBITMQ_SOURCE_URL" ]; then \\
+          echo "Using local RabbitMQ package: \$RABBITMQ_SOURCE_URL"; \\
+          cp "\$RABBITMQ_SOURCE_URL" "\$RABBITMQ_PATH.tar.xz"; \\
+          else \\' Dockerfile-alpine.template
 
-                    sed -i '/rm -rf "\$GNUPGHOME"; \\/a fi' Dockerfile-alpine.template
+          sed -i '/rm -rf "\$GNUPGHOME"; \\/a fi; \\' Dockerfile-alpine.template
 
-                    echo "::endgroup::"
+          echo "::endgroup::"
 
-                    echo "::group::🧩 Patching Dockerfile-management.template"
-                    sed -i '1iARG BASE_IMAGE=""' Dockerfile-management.template
-                    sed -i 's|FROM {{|FROM \${BASE_IMAGE:-rabbitmq:{{|' Dockerfile-management.template
-                    echo "::endgroup::"
+          echo "::group::🧩 Patching Dockerfile-management.template"
+          sed -i '1iARG BASE_IMAGE=""' Dockerfile-management.template
+          sed -i 's|FROM {{|FROM \${BASE_IMAGE:-rabbitmq:{{|' Dockerfile-management.template
+          echo "::endgroup::"
 
       - name: Generate Dockerfiles
         run: |
