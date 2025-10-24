@@ -37,7 +37,7 @@ jobs:
       DOCKER_LIBRARY_RABBITMQ: ${{ inputs.docker-library-rabbitmq }}
 
     steps:
-      # --- исходники RabbitMQ ---
+      # --- Исходники RabbitMQ ---
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -102,7 +102,7 @@ jobs:
           echo "=== TAR content ==="
           tar -tf PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz | grep sbin/ || echo "No sbin found"
 
-      # --- Dockerfile генерация и сборка ---
+      # --- Dockerfile генерация и патчинг ---
       - name: Checkout docker-library/rabbitmq
         uses: actions/checkout@v4
         with:
@@ -110,27 +110,43 @@ jobs:
           ref: master
           path: docker-library
 
-      - name: Apply template modifications
+      - name: Patch docker-library templates
+        run: |
+          cd docker-library
+
+          echo "::group::🧩 Patching Dockerfile-alpine.template"
+          # Добавляем поддержку локального RABBITMQ_SOURCE_URL
+          sed -i '/# Use the latest stable RabbitMQ release/a ARG RABBITMQ_SOURCE_URL=""' Dockerfile-alpine.template
+          sed -i 's|RABBITMQ_SOURCE_URL="https://github.com/rabbitmq/rabbitmq-server/releases/download/v\$RABBITMQ_VERSION/rabbitmq-server-generic-unix-latest-toolchain-\$RABBITMQ_VERSION.tar.xz"|if [ -z "\$RABBITMQ_SOURCE_URL" ]; then RABBITMQ_SOURCE_URL="https://github.com/rabbitmq/rabbitmq-server/releases/download/v\$RABBITMQ_VERSION/rabbitmq-server-generic-unix-latest-toolchain-\$RABBITMQ_VERSION.tar.xz"; fi|' Dockerfile-alpine.template
+          echo "::endgroup::"
+
+          echo "::group::🧩 Patching Dockerfile-management.template"
+          # Добавляем ARG BASE_IMAGE и FROM с подстановкой
+          sed -i '1iARG BASE_IMAGE=""' Dockerfile-management.template
+          sed -i 's|FROM {{|FROM \${BASE_IMAGE:-rabbitmq:{{|' Dockerfile-management.template
+          echo "::endgroup::"
+
+      - name: Generate Dockerfiles
         run: |
           cd docker-library
           ./versions.sh
           ./apply-templates.sh ${{ inputs.docker-library-rabbitmq }}
-          # патчим management шаблон, чтобы поддерживал BASE_IMAGE
-          sed -i '1iARG BASE_IMAGE=""' Dockerfile-management.template
-          sed -i '2iFROM ${BASE_IMAGE:-rabbitmq:${{ inputs.docker-library-rabbitmq }}-alpine}' Dockerfile-management.template
 
-      - name: Show only modified Dockerfiles
+      - name: Show generated Dockerfiles
         run: |
-          cd docker-library
-          git diff --unified=0 --no-color | tee /tmp/dockerfile_changes.diff
-          echo "::group::🐋 Dockerfile changes"
-          cat /tmp/dockerfile_changes.diff
+          echo "::group::🐋 BASE Dockerfile (alpine)"
+          cat docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/Dockerfile
+          echo "::endgroup::"
+
+          echo "::group::🐋 MANAGEMENT Dockerfile (alpine)"
+          cat docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management/Dockerfile
           echo "::endgroup::"
 
       - name: Prepare build context
         run: |
           cp PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/
 
+      # --- Сборка Docker-образов ---
       - name: Build base Docker image
         run: |
           cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine
@@ -138,7 +154,6 @@ jobs:
             --build-arg RABBITMQ_SOURCE_URL="./rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz" \
             -t ghcr.io/${{ github.repository }}/rabbitmq:${{ inputs.tag }} .
 
-      # --- Management образ ---
       - name: Build management Docker image
         run: |
           cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management
