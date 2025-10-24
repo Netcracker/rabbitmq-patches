@@ -103,73 +103,40 @@ jobs:
           echo "=== TAR content ==="
           tar -tf PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz | grep sbin/ || echo "No sbin found"
 
+      # 👇 Новый блок — Docker build
+
       - name: Checkout docker-library/rabbitmq
         uses: actions/checkout@v4
         with:
           repository: docker-library/rabbitmq
           ref: master
-          path: docker-library-rabbitmq
+          path: docker-library
 
-      - name: Generate Dockerfile from template
+      - name: Apply template modifications
         run: |
-          cd docker-library-rabbitmq/${{ env.DOCKER_LIBRARY_RABBITMQ }}/alpine
+          cd docker-library
+          ./versions.sh
+          ./apply-templates.sh ${{ inputs.docker-library-rabbitmq }}
 
-          echo "=== Original Dockerfile content ==="
-          head -10 Dockerfile
-
-          echo "=== Looking for RabbitMQ installation section ==="
-          grep -A 20 -B 5 "rabbitmq-server-generic-unix" Dockerfile || echo "No generic-unix found"
-
-          # Заменяем секцию скачивания RabbitMQ на использование локального файла
-          sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,/chown -R rabbitmq:rabbitmq "\$RABBITMQ_HOME"/c\
-          COPY ../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz "$RABBITMQ_PATH.tar.xz"; \\\n\
-          \\\n\
-          mkdir -p "$RABBITMQ_HOME"; \\\n\
-          tar --extract --file "$RABBITMQ_PATH.tar.xz" --directory "$RABBITMQ_HOME" --strip-components 1; \\\n\
-          rm -rf "$RABBITMQ_PATH"*; \\\n\
-          # Do not default SYS_PREFIX to RABBITMQ_HOME, leave it empty \\\n\
-          grep -qE "^SYS_PREFIX=\\$\\{RABBITMQ_HOME\\}$" "$RABBITMQ_HOME/sbin/rabbitmq-defaults"; \\\n\
-          sed -i "s/^SYS_PREFIX=.*$/SYS_PREFIX=/" "$RABBITMQ_HOME/sbin/rabbitmq-defaults"; \\\n\
-          grep -qE "^SYS_PREFIX=$" "$RABBITMQ_HOME/sbin/rabbitmq-defaults"; \\\n\
-          chown -R rabbitmq:rabbitmq "$RABBITMQ_HOME";' Dockerfile
-
-          echo "✅ Generated Dockerfile section:"
-          grep -A 15 -B 5 "COPY.*rabbitmq-server-generic-unix" Dockerfile || echo "COPY not found"
-
-      - name: Build base RabbitMQ image
+      - name: Prepare build context
         run: |
-          cd docker-library-rabbitmq/${{ env.DOCKER_LIBRARY_RABBITMQ }}/alpine
+          cp PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/
+          cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine
+          ls -lh
+
+      - name: Build Docker image
+        run: |
+          cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine
           docker build \
-            --build-arg RABBITMQ_VERSION=${{ inputs.rabbitmq-tag }} \
-            -t ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} .
+            --build-arg RABBITMQ_SOURCE_URL="./rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz" \
+            -t ghcr.io/${{ github.repository }}/rabbitmq:${{ inputs.tag }} .
 
-      - name: Verify base image content
-        run: |
-          docker run --rm ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }} ls -l /opt/rabbitmq/sbin
-
-      - name: Login to GHCR
+      - name: Push Docker image
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push base image
-        run: docker push ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }}
-
-      - name: Build management RabbitMQ image
-        run: |
-          cd docker-library-rabbitmq/${{ env.DOCKER_LIBRARY_RABBITMQ }}/alpine/management
-          sed -i 's|^FROM rabbitmq:.*|FROM ghcr.io/${{ github.repository_owner }}/rabbitmq-base:${{ inputs.tag }}|' Dockerfile
-          docker build -t ghcr.io/${{ github.repository_owner }}/rabbitmq:${{ inputs.tag }}-management .
-
-      - name: Push management image
-        run: docker push ghcr.io/${{ github.repository_owner }}/rabbitmq:${{ inputs.tag }}-management
-
-      - name: Upload assets
-        uses: netcracker/qubership-workflow-hub/actions/assets-action@main
-        with:
-          tag: ${{ inputs.tag }}
-          item-path: PACKAGES/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push image to GHCR
+        run: docker push ghcr.io/${{ github.repository }}/rabbitmq:${{ inputs.tag }}
