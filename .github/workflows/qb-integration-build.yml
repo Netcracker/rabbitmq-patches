@@ -1,5 +1,5 @@
 name: "Integration RabbitMQ"
-run-name: "RabbitMQ version ${{ env.RABBITMQ_TAG }}"
+run-name: "RabbitMQ version ${{ inputs.rabbitmq-tag }}"
 
 on:
   workflow_dispatch:
@@ -50,7 +50,7 @@ jobs:
         uses: netcracker/qubership-workflow-hub/actions/tag-action@v2.0.1
         with:
           ref: ${{ github.ref_name }}
-          tag-name: ${{ env.TAG }}
+          tag-name: ${{ inputs.tag }}
           force-create: ${{ inputs.forceCreate }}
           switch-to-tag: true
           create-release: true
@@ -65,17 +65,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: rabbitmq/rabbitmq-server
-          ref: ${{ env.RABBITMQ_TAG }}
+          ref: ${{ inputs.rabbitmq-tag }}
 
       - name: Checkout rabbitmq-patches
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.TAG }}
+          ref: ${{ inputs.tag }}
           path: rabbitmq-patches
 
       - name: Apply patches
         run: |
-          for p in ./rabbitmq-patches/rabbitmq-patches/${{ env.RABBITMQ_TAG }}/*.patch; do
+          for p in ./rabbitmq-patches/rabbitmq-patches/${{ inputs.rabbitmq-tag }}/*.patch; do
             echo "Applying $p..."
             git apply -p1 --ignore-space-change --ignore-whitespace "$p"
           done
@@ -96,14 +96,14 @@ jobs:
           sudo snap install libxslt
 
       - name: Build RabbitMQ generic-unix package
-        run: make package-generic-unix PROJECT_VERSION=${{ env.RABBITMQ_TAG }}
+        run: make package-generic-unix PROJECT_VERSION=${{ inputs.rabbitmq-tag }}
 
       - name: Verify built package
         run: |
           echo "=== PACKAGES directory ==="
           ls -lh PACKAGES
           echo "=== TAR content ==="
-          tar -tf PACKAGES/rabbitmq-server-generic-unix-${{ env.RABBITMQ_TAG }}.tar.xz | grep sbin/ || echo "No sbin found"
+          tar -tf PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz | grep sbin/ || echo "No sbin found"
 
       # --- Dockerfile генерация и патчинг ---
       - name: Checkout docker-library/rabbitmq
@@ -145,47 +145,47 @@ jobs:
         run: |
           cd docker-library
           ./versions.sh
-          ./apply-templates.sh ${{ env.DOCKER_LIBRARY_RABBITMQ }}
+          ./apply-templates.sh ${{ inputs.docker-library-rabbitmq }}
 
       - name: Inject BASE_IMAGE into generated management Dockerfile
         run: |
-          file="docker-library/${{ env.DOCKER_LIBRARY_RABBITMQ }}/alpine/management/Dockerfile"
+          file="docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management/Dockerfile"
           sed -i '1iARG BASE_IMAGE=""' "$file"
           sed -i 's|^FROM rabbitmq:\(.*\)|FROM ${BASE_IMAGE:-rabbitmq:\1}|' "$file"
 
       - name: Show generated Dockerfiles
         run: |
           echo "::group::🐋 BASE Dockerfile (alpine)"
-          cat docker-library/${{ env.DOCKER_LIBRARY_RABBITMQ }}/alpine/Dockerfile
+          cat docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/Dockerfile
           echo "::endgroup::"
 
           echo "::group::🐋 MANAGEMENT Dockerfile (alpine)"
-          cat docker-library/${{ env.DOCKER_LIBRARY_RABBITMQ }}/alpine/management/Dockerfile
+          cat docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management/Dockerfile
           echo "::endgroup::"
 
       - name: Prepare build context
         run: |
-          cp PACKAGES/rabbitmq-server-generic-unix-${{ env.RABBITMQ_TAG }}.tar.xz docker-library/${{ env.DOCKER_LIBRARY_RABBITMQ }}/alpine/
+          cp PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/
 
       # --- Сборка Docker-образов ---
       - name: Build base Docker image
         run: |
-          cd docker-library/${{ env.DOCKER_LIBRARY_RABBITMQ }}/alpine
+          cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine
           docker build \
-            --build-arg RABBITMQ_SOURCE_URL="./rabbitmq-server-generic-unix-${{ env.RABBITMQ_TAG }}.tar.xz" \
-            -t $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ env.TAG }} .
+            --build-arg RABBITMQ_SOURCE_URL="./rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz" \
+            -t $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }} .
 
       - name: Build management Docker image
         run: |
-          cd docker-library/${{ env.DOCKER_LIBRARY_RABBITMQ }}/alpine/management
+          cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management
           docker build \
-            --build-arg BASE_IMAGE=$IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ env.TAG }} \
-            -t $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ env.TAG }} .
+            --build-arg BASE_IMAGE=$IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }} \
+            -t $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }} .
 
       # --- Проверка образов ---
       - name: Test RabbitMQ base image
         run: |
-          docker run -d --rm --name test-rabbit -p 5672:5672 $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ env.TAG }}
+          docker run -d --rm --name test-rabbit -p 5672:5672 $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }}
           sleep 15
           docker logs test-rabbit | grep "Server startup complete"
           docker exec test-rabbit rabbitmqctl status
@@ -193,7 +193,7 @@ jobs:
 
       - name: Test RabbitMQ management image
         run: |
-          docker run -d --rm --name test-rabbit-mgmt -p 15672:15672 $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ env.TAG }}
+          docker run -d --rm --name test-rabbit-mgmt -p 15672:15672 $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }}
           sleep 15
           docker logs test-rabbit-mgmt | grep "Server startup complete"
           docker exec test-rabbit-mgmt rabbitmq-plugins list -E | grep rabbitmq_management
@@ -209,5 +209,5 @@ jobs:
 
       - name: Push Docker images
         run: |
-          docker push $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ env.TAG }}
-          docker push $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ env.TAG }}
+          docker push $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }}
+          docker push $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }}
