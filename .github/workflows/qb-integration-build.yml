@@ -35,6 +35,9 @@ jobs:
       RABBITMQ_TAG: ${{ inputs.rabbitmq-tag }}
       TAG: ${{ inputs.tag }}
       DOCKER_LIBRARY_RABBITMQ: ${{ inputs.docker-library-rabbitmq }}
+      IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+      BASE_IMAGE_NAME: qubership-rabbitmq-base
+      MGMT_IMAGE_NAME: qubership-rabbitmq-management
 
     steps:
       # --- Исходники RabbitMQ ---
@@ -152,14 +155,14 @@ jobs:
           cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine
           docker build \
             --build-arg RABBITMQ_SOURCE_URL="./rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz" \
-            -t ghcr.io/${{ github.repository }}/rabbitmq:${{ inputs.tag }} .
+            -t $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }} .
 
       - name: Build management Docker image
         run: |
           cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management
           docker build \
-            --build-arg BASE_IMAGE=ghcr.io/${{ github.repository }}/rabbitmq:${{ inputs.tag }} \
-            -t ghcr.io/${{ github.repository }}/rabbitmq-management:${{ inputs.tag }} .
+            --build-arg BASE_IMAGE=$IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }} \
+            -t $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }} .
 
       # --- Проверка образов ---
       - name: Test RabbitMQ base image
@@ -188,5 +191,5 @@ jobs:
 
       - name: Push Docker images
         run: |
-          docker push ghcr.io/${{ github.repository }}/rabbitmq:${{ inputs.tag }}
-          docker push ghcr.io/${{ github.repository }}/rabbitmq-management:${{ inputs.tag }}
+          docker push $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }}
+          docker push $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }}
