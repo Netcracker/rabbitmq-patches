@@ -123,25 +123,26 @@ jobs:
 
           echo "=== Original Dockerfile section ==="
           grep -A 15 -B 5 "wget.*RABBITMQ_PATH" Dockerfile || echo "wget pattern not found"
-          
+
           echo "=== Looking for sed pattern ==="
           grep -n "wget --output-document.*RABBITMQ_PATH.tar.xz.asc" Dockerfile || echo "asc pattern not found"
           grep -n "grep -qE.*SYS_PREFIX" Dockerfile || echo "SYS_PREFIX pattern not found"
 
-          # заменяем блок wget → COPY и добавляем ENV сразу туда же
-          sed -i '/wget --output-document "\$RABBITMQ_PATH.tar.xz.asc"/,/grep -qE .SYS_PREFIX=/c\
-          COPY ../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz /tmp/rabbitmq.tar.xz\n\
-          ENV RABBITMQ_HOME=/opt/rabbitmq\n\
-          ENV PATH=$RABBITMQ_HOME/sbin:$PATH\n\
-          RUN set -eux; \\\n\
-              mkdir -p \"$RABBITMQ_HOME\"; \\\n\
-              tar --extract --file /tmp/rabbitmq.tar.xz --directory \"$RABBITMQ_HOME\" --strip-components 1; \\\n\
+          # Простая замена без сложного sed
+          cp Dockerfile Dockerfile.bak
 
-              echo \"=== Extracted files ===\"; \\\n\
-              find \"$RABBITMQ_HOME\" -maxdepth 2 -type d; \\\n\
-              rm /tmp/rabbitmq.tar.xz;' Dockerfile
+          # Находим номера строк
+          echo "=== Finding line numbers ==="
+          grep -n "wget.*RABBITMQ_PATH.tar.xz.asc" Dockerfile
+          grep -n "grep -qE.*SYS_PREFIX" Dockerfile
 
-          echo "Check Dockerfile ENV presence:"
+          # Используем простую замену - заменяем только URL скачивания на COPY
+          sed -i 's|wget --output-document "$RABBITMQ_PATH.tar.xz.asc" "$RABBITMQ_SOURCE_URL.asc";|# wget --output-document "$RABBITMQ_PATH.tar.xz.asc" "$RABBITMQ_SOURCE_URL.asc";|' Dockerfile
+          sed -i 's|wget --output-document "$RABBITMQ_PATH.tar.xz" "$RABBITMQ_SOURCE_URL";|COPY ../../../PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz "$RABBITMQ_PATH.tar.xz";|' Dockerfile
+
+          # Добавляем ENV переменные в начало файла
+          sed -i '1i ENV RABBITMQ_HOME=/opt/rabbitmq' Dockerfile
+          sed -i '2i ENV PATH=$RABBITMQ_HOME/sbin:$PATH' Dockerfile          echo "Check Dockerfile ENV presence:"
           grep "RABBITMQ_HOME" Dockerfile || echo "WARNING: ENV not inserted!"
 
           echo "=== Modified Dockerfile section ==="
