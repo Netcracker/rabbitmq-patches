@@ -153,6 +153,9 @@ jobs:
           ./versions.sh
           ./apply-templates.sh ${{ inputs.docker-library-rabbitmq }}
 
+      - name: Check management Dockerfile FROM line
+        run: grep -m1 '^FROM' docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management/Dockerfile
+
       - name: Show generated Dockerfiles
         run: |
           echo "::group::🐋 BASE Dockerfile (alpine)"
