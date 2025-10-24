@@ -143,9 +143,8 @@ jobs:
 
           echo "::group::🧩 Patching Dockerfile-management.template"
           sed -i '1iARG BASE_IMAGE=""' Dockerfile-management.template
-          sed -E -i 's|^FROM[[:space:]]+(\{\{.*\}\})|FROM ${BASE_IMAGE:-\1}|' Dockerfile-management.template
+          sed -E -i 's|^[[:space:]]*FROM[[:space:]]+(\{\{.*\}\})|FROM ${BASE_IMAGE:-\1}|' Dockerfile-management.template
           echo "::endgroup::"
-
 
       - name: Generate Dockerfiles
         run: |
