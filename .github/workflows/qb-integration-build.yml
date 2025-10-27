@@ -42,7 +42,7 @@ jobs:
     steps:
       # --- Исходники RabbitMQ ---
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -107,7 +107,7 @@ jobs:
 
       # --- Dockerfile генерация и патчинг ---
       - name: Checkout docker-library/rabbitmq
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: docker-library/rabbitmq
           ref: master
