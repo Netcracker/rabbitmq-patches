@@ -1,4 +1,4 @@
-name: "Integration RabbitMQ"
+name: "Integration Build RabbitMQ"
 run-name: "RabbitMQ version ${{ inputs.rabbitmq-tag }}"
 
 on:
@@ -19,6 +19,10 @@ on:
         options:
           - "4.1"
           - "4.2"
+      event-target-repo:
+        description: "Repository to send the custom event to"
+        required: false
+        default: "qubership-rabbitmq"
       forceCreate:
         type: boolean
         description: "Override tag name (default: true)"
@@ -38,6 +42,7 @@ jobs:
       IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
       BASE_IMAGE_NAME: qubership-rabbitmq-base
       MGMT_IMAGE_NAME: qubership-rabbitmq-management
+      EVENT_TARGET_REPO: ${{ inputs.event-target-repo }}
 
     steps:
       # --- Исходники RabbitMQ ---
@@ -225,6 +230,6 @@ jobs:
                "owner": "${{ github.repository_owner }}",
                "forceCreate": "${{ inputs.forceCreate }}"
             }
-          owner: "nookyo"
-          repo: "keycloak"
+          owner: "${{ github.repository_owner }}"
+          repo: "${{ env.EVENT_TARGET_REPO }}"
           github-token: ${{ secrets.GH_ACCESS_TOKEN }}
