@@ -213,20 +213,6 @@ jobs:
             BASE_IMAGE=${{ env.FULL_BASE_IMAGE_NAME }}
           provenance: false
 
-      # - name: Build base Docker image
-      #   run: |
-      #     cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine
-      #     docker build \
-      #       --build-arg RABBITMQ_SOURCE_URL="./rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz" \
-      #       -t $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }} .
-
-      # - name: Build management Docker image
-      #   run: |
-      #     cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management
-      #     docker build \
-      #       --build-arg BASE_IMAGE=$IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }} \
-      #       -t $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }} .
-
       # --- Проверка образов ---
       - name: Test RabbitMQ base image
         run: |
@@ -243,19 +229,6 @@ jobs:
           docker logs test-rabbit-mgmt | grep "Server startup complete"
           docker exec test-rabbit-mgmt rabbitmq-plugins list -E | grep rabbitmq_management
           docker stop test-rabbit-mgmt
-
-      # --- Публикация ---
-      # - name: Log in to GHCR
-      #   uses: docker/login-action@v3
-      #   with:
-      #     registry: ghcr.io
-      #     username: ${{ github.actor }}
-      #     password: ${{ secrets.GITHUB_TOKEN }}
-
-      # - name: Push Docker images
-      #   run: |
-      #     docker push $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }}
-      #     docker push $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }}
 
       - name: Trigger custom event
         uses: netcracker/qubership-workflow-hub/actions/custom-event@v2.0.1
