@@ -215,7 +215,7 @@ jobs:
       - name: Trigger custom event
         uses: netcracker/qubership-workflow-hub/actions/custom-event@v2.0.1
         with:
-          event-type: "integration-patched-keycloak-built"
+          event-type: "integration-rabbit-built"
           client-payload: |
             {
                "base_images": "$IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ env.TAG }}",
