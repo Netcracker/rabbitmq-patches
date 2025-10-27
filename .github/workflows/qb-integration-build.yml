@@ -43,6 +43,8 @@ jobs:
       BASE_IMAGE_NAME: qubership-rabbitmq-base
       MGMT_IMAGE_NAME: qubership-rabbitmq-management
       EVENT_TARGET_REPO: ${{ inputs.event-target-repo }}
+      FULL_BASE_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/qubership-rabbitmq-base:${{ inputs.tag }}
+      FULL_MGM_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/qubership-rabbitmq-management:${{ inputs.tag }}
 
     steps:
       # --- Исходники RabbitMQ ---
@@ -172,39 +174,13 @@ jobs:
         run: |
           cp PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/
 
-      # --- Сборка Docker-образов ---
-      - name: Build base Docker image
-        run: |
-          cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine
-          docker build \
-            --build-arg RABBITMQ_SOURCE_URL="./rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz" \
-            -t $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }} .
+      # --- Prepare for Docker Multi build ---
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-      - name: Build management Docker image
-        run: |
-          cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management
-          docker build \
-            --build-arg BASE_IMAGE=$IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }} \
-            -t $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }} .
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      # --- Проверка образов ---
-      - name: Test RabbitMQ base image
-        run: |
-          docker run -d --rm --name test-rabbit -p 5672:5672 $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }}
-          sleep 15
-          docker logs test-rabbit | grep "Server startup complete"
-          docker exec test-rabbit rabbitmqctl status
-          docker stop test-rabbit
-
-      - name: Test RabbitMQ management image
-        run: |
-          docker run -d --rm --name test-rabbit-mgmt -p 15672:15672 $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }}
-          sleep 15
-          docker logs test-rabbit-mgmt | grep "Server startup complete"
-          docker exec test-rabbit-mgmt rabbitmq-plugins list -E | grep rabbitmq_management
-          docker stop test-rabbit-mgmt
-
-      # --- Публикация ---
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -212,10 +188,74 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push Docker images
+      # --- Build Docker-images ---
+      - name: Build base Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker-library/${{ inputs.docker-library-rabbitmq }}/alpine
+          file: docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{env.FULL_BASE_IMAGE_NAME }}
+          build-args: |
+            RABBITMQ_SOURCE_URL=./rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz
+          provenance: false
+
+      - name: Build management Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management
+          file: docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{env.FULL_MGM_IMAGE_NAME }}
+          build-args: |
+            BASE_IMAGE=${{ env.FULL_BASE_IMAGE_NAME }}
+          provenance: false
+
+      # - name: Build base Docker image
+      #   run: |
+      #     cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine
+      #     docker build \
+      #       --build-arg RABBITMQ_SOURCE_URL="./rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz" \
+      #       -t $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }} .
+
+      # - name: Build management Docker image
+      #   run: |
+      #     cd docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management
+      #     docker build \
+      #       --build-arg BASE_IMAGE=$IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }} \
+      #       -t $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }} .
+
+      # --- Проверка образов ---
+      - name: Test RabbitMQ base image
         run: |
-          docker push $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }}
-          docker push $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }}
+          docker run -d --rm --name test-rabbit -p 5672:5672 ${{ env.FULL_BASE_IMAGE_NAME }}
+          sleep 15
+          docker logs test-rabbit | grep "Server startup complete"
+          docker exec test-rabbit rabbitmqctl status
+          docker stop test-rabbit
+
+      - name: Test RabbitMQ management image
+        run: |
+          docker run -d --rm --name test-rabbit-mgmt -p 15672:15672 ${{ env.FULL_MGM_IMAGE_NAME }}
+          sleep 15
+          docker logs test-rabbit-mgmt | grep "Server startup complete"
+          docker exec test-rabbit-mgmt rabbitmq-plugins list -E | grep rabbitmq_management
+          docker stop test-rabbit-mgmt
+
+      # --- Публикация ---
+      # - name: Log in to GHCR
+      #   uses: docker/login-action@v3
+      #   with:
+      #     registry: ghcr.io
+      #     username: ${{ github.actor }}
+      #     password: ${{ secrets.GITHUB_TOKEN }}
+
+      # - name: Push Docker images
+      #   run: |
+      #     docker push $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }}
+      #     docker push $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }}
 
       - name: Trigger custom event
         uses: netcracker/qubership-workflow-hub/actions/custom-event@v2.0.1
@@ -223,8 +263,8 @@ jobs:
           event-type: "integration-rabbit-built"
           client-payload: |
             {
-               "base_image": "${{ env.IMAGE_REGISTRY }}/${{ env.BASE_IMAGE_NAME }}:${{ env.TAG }}",
-               "management_image": "${{ env.IMAGE_REGISTRY }}/${{ env.MGMT_IMAGE_NAME }}:${{ env.TAG }}",
+               "base_image": "${{ env.FULL_BASE_IMAGE_NAME}}", }}",
+               "management_image": "${{ env.FULL_MGM_IMAGE_NAME}}",
                "tag": "${{ env.TAG }}",
                "patchedTag": "${{ env.RABBITMQ_TAG }}",
                "repo": "${{ github.repository }}",
