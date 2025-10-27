@@ -211,3 +211,20 @@ jobs:
         run: |
           docker push $IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ inputs.tag }}
           docker push $IMAGE_REGISTRY/$MGMT_IMAGE_NAME:${{ inputs.tag }}
+
+      - name: Trigger custom event
+        uses: netcracker/qubership-workflow-hub/actions/custom-event@v2.0.1
+        with:
+          event-type: "integration-patched-keycloak-built"
+          client-payload: |
+            {
+               "base_images": "$IMAGE_REGISTRY/$BASE_IMAGE_NAME:${{ env.TAG }}",
+               "tag": "${{ env.TAG }}",
+               "patchedTag": "${{ env.RABBITMQ_TAG }}",
+               "repo": "${{ github.repository }}",
+               "owner": "${{ github.repository_owner }}",
+               "forceCreate": "${{ inputs.forceCreate }}"
+            }
+          owner: "nookyo"
+          repo: "keycloak"
+          github-token: ${{ secrets.PAT_FOR_DISPATCH }}
