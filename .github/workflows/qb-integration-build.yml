@@ -263,7 +263,7 @@ jobs:
           event-type: "integration-rabbit-built"
           client-payload: |
             {
-               "base_image": "${{ env.FULL_BASE_IMAGE_NAME}}", }}",
+               "base_image": "${{ env.FULL_BASE_IMAGE_NAME}}",
                "management_image": "${{ env.FULL_MGM_IMAGE_NAME}}",
                "tag": "${{ env.TAG }}",
                "patchedTag": "${{ env.RABBITMQ_TAG }}",
