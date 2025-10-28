@@ -82,7 +82,7 @@ jobs:
 
       - name: Apply patches
         run: |
-          ls - la
+          ls -la
           for p in ./rabbitmq-patches/${{ inputs.rabbitmq-tag }}/*.patch; do
             echo "Applying $p..."
             git apply -p1 --ignore-space-change --ignore-whitespace "$p"
