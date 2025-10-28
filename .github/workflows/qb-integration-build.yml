@@ -1,4 +1,4 @@
-name: "Build IntegrationRabbitMQ"
+name: "Build Integration RabbitMQ"
 run-name: "RabbitMQ ${{ inputs.rabbitmq-tag }} -> Release ${{ inputs.tag }} (docker-lib: ${{ inputs.docker-library-rabbitmq }})"
 
 on:
