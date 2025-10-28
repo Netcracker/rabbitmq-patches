@@ -1,0 +1,249 @@
+name: "Build Integration RabbitMQ"
+run-name: "RabbitMQ ${{ inputs.rabbitmq-tag }} -> Release ${{ inputs.tag }} (docker-lib: ${{ inputs.docker-library-rabbitmq }})"
+
+on:
+  workflow_dispatch:
+    inputs:
+      rabbitmq-tag:
+        description: "RabbitMQ version to build"
+        required: true
+        default: "v4.1.2"
+      tag:
+        description: "Tag for release and Docker images"
+        required: true
+        default: "v4.1.2-patched"
+      docker-library-rabbitmq:
+        description: "RabbitMQ docker-library version"
+        required: true
+        type: choice
+        options:
+          - "4.1"
+          - "4.2"
+      event-target-repo:
+        description: "Repository to send the custom event to"
+        required: false
+        default: "qubership-rabbitmq"
+      forceCreate:
+        type: boolean
+        description: "Override tag name (default: true)"
+        default: true
+
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-rabbitmq:
+    runs-on: ubuntu-latest
+    env:
+      RABBITMQ_TAG: ${{ inputs.rabbitmq-tag }}
+      TAG: ${{ inputs.tag }}
+      DOCKER_LIBRARY_RABBITMQ: ${{ inputs.docker-library-rabbitmq }}
+      IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+      BASE_IMAGE_NAME: qubership-rabbitmq-base
+      MGMT_IMAGE_NAME: qubership-rabbitmq-management
+      EVENT_TARGET_REPO: ${{ inputs.event-target-repo }}
+      FULL_BASE_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/qubership-rabbitmq-base:${{ inputs.tag }}
+      FULL_MGM_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/qubership-rabbitmq-management:${{ inputs.tag }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Create a release tag
+        uses: netcracker/qubership-workflow-hub/actions/tag-action@v2.0.1
+        with:
+          ref: ${{ github.ref_name }}
+          tag-name: ${{ inputs.tag }}
+          force-create: ${{ inputs.forceCreate }}
+          switch-to-tag: true
+          create-release: true
+          skip-checkout: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup workspace
+        run: rm -rf ./*
+
+        # --- Исходники RabbitMQ ---
+      - name: Checkout RabbitMQ source
+        uses: actions/checkout@v5
+        with:
+          repository: rabbitmq/rabbitmq-server
+          ref: ${{ inputs.rabbitmq-tag }}
+
+      - name: Checkout rabbitmq-patches
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+          path: rabbitmq-patches
+
+      - name: Apply patches
+        run: |
+          ls -la
+          for p in ./rabbitmq-patches/rabbitmq-patches/${{ inputs.rabbitmq-tag }}/*.patch; do
+            echo "Applying $p..."
+            git apply -p1 --ignore-space-change --ignore-whitespace "$p"
+          done
+          rm -rf ./rabbitmq-patches
+
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update
+          sudo tee /etc/dpkg/dpkg.cfg.d/01_nodoc > /dev/null <<'EOF'
+          path-exclude /usr/share/doc/*
+          path-exclude /usr/share/man/*
+          path-exclude /usr/share/info/*
+          EOF
+          sudo add-apt-repository ppa:rabbitmq/rabbitmq-erlang -y
+          sudo apt-get update
+          sudo apt-get install -y git elixir erlang erlang-nox xmlto \
+            build-essential debhelper erlang-dev
+          sudo snap install libxslt
+
+      - name: Build RabbitMQ generic-unix package
+        run: make package-generic-unix PROJECT_VERSION=${{ inputs.rabbitmq-tag }}
+
+      - name: Verify built package
+        run: |
+          echo "=== PACKAGES directory ==="
+          ls -lh PACKAGES
+          echo "=== TAR content ==="
+          tar -tf PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz | grep sbin/ || echo "No sbin found"
+
+      # --- Dockerfile генерация и патчинг ---
+      - name: Checkout docker-library/rabbitmq
+        uses: actions/checkout@v5
+        with:
+          repository: docker-library/rabbitmq
+          ref: master
+          path: docker-library
+
+      - name: Patch docker-library templates
+        shell: bash
+        run: |
+          cd docker-library
+          echo "::group::🧩 Patching Dockerfile-alpine.template"
+
+          # Добавляем ARG
+          sed -i '/# Use the latest stable RabbitMQ release/a ARG RABBITMQ_SOURCE_URL=""' Dockerfile-alpine.template
+
+          # Вставляем условие, но только внутри секции RabbitMQ
+          awk '
+            BEGIN {in_rmq=0}
+            /# Use the latest stable RabbitMQ release/ {in_rmq=1}
+            in_rmq && /wget --output-document "\$RABBITMQ_PATH\.tar\.xz\.asc"/ {
+              print "if [ -f \"$RABBITMQ_SOURCE_URL\" ]; then \\"
+              print "  echo \"Using local RabbitMQ package: $RABBITMQ_SOURCE_URL\"; \\"
+              print "  cp \"$RABBITMQ_SOURCE_URL\" \"$RABBITMQ_PATH.tar.xz\"; \\"
+              print "else \\"
+            }
+            {print}
+            in_rmq && /rm -rf "\$GNUPGHOME"; \\/ {
+              print "fi; \\"
+              in_rmq=0
+            }
+          ' Dockerfile-alpine.template > tmp && mv tmp Dockerfile-alpine.template
+
+          echo "::endgroup::"
+
+      - name: Generate Dockerfiles
+        run: |
+          cd docker-library
+          ./versions.sh
+          ./apply-templates.sh ${{ inputs.docker-library-rabbitmq }}
+
+      - name: Inject BASE_IMAGE into generated management Dockerfile
+        run: |
+          file="docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management/Dockerfile"
+          sed -i '1iARG BASE_IMAGE=""' "$file"
+          sed -i 's|^FROM rabbitmq:\(.*\)|FROM ${BASE_IMAGE:-rabbitmq:\1}|' "$file"
+
+      - name: Show generated Dockerfiles
+        run: |
+          echo "::group::🐋 BASE Dockerfile (alpine)"
+          cat docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/Dockerfile
+          echo "::endgroup::"
+
+          echo "::group::🐋 MANAGEMENT Dockerfile (alpine)"
+          cat docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management/Dockerfile
+          echo "::endgroup::"
+
+      - name: Prepare build context
+        run: |
+          cp PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/
+
+      # --- Prepare for Docker Multi build ---
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- Build Docker-images ---
+      - name: Build base Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker-library/${{ inputs.docker-library-rabbitmq }}/alpine
+          file: docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          tags: ${{env.FULL_BASE_IMAGE_NAME }}
+          build-args: |
+            RABBITMQ_SOURCE_URL=./rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz
+          provenance: false
+
+      - name: Build management Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management
+          file: docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          tags: ${{env.FULL_MGM_IMAGE_NAME }}
+          build-args: |
+            BASE_IMAGE=${{ env.FULL_BASE_IMAGE_NAME }}
+          provenance: false
+
+      # --- Test docker images ---
+      - name: Test RabbitMQ base image
+        run: |
+          docker run -d --rm --name test-rabbit -p 5672:5672 ${{ env.FULL_BASE_IMAGE_NAME }}
+          sleep 15
+          docker logs test-rabbit | grep "Server startup complete"
+          docker exec test-rabbit rabbitmqctl status
+          docker stop test-rabbit
+
+      - name: Test RabbitMQ management image
+        run: |
+          docker run -d --rm --name test-rabbit-mgmt -p 15672:15672 ${{ env.FULL_MGM_IMAGE_NAME }}
+          sleep 15
+          docker logs test-rabbit-mgmt | grep "Server startup complete"
+          docker exec test-rabbit-mgmt rabbitmq-plugins list -E | grep rabbitmq_management
+          docker stop test-rabbit-mgmt
+
+      - name: Trigger custom event
+        uses: netcracker/qubership-workflow-hub/actions/custom-event@v2.0.1
+        with:
+          event-type: "integration-rabbit-built"
+          client-payload: |
+            {
+               "base_image": "${{ env.FULL_BASE_IMAGE_NAME}}",
+               "management_image": "${{ env.FULL_MGM_IMAGE_NAME}}",
+               "tag": "${{ env.TAG }}",
+               "patchedTag": "${{ env.RABBITMQ_TAG }}",
+               "repo": "${{ github.repository }}",
+               "owner": "${{ github.repository_owner }}",
+               "forceCreate": "${{ inputs.forceCreate }}"
+            }
+          owner: "${{ github.repository_owner }}"
+          repo: "${{ env.EVENT_TARGET_REPO }}"
+          github-token: ${{ secrets.GH_ACCESS_TOKEN }}
