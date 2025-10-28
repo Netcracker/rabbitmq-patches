@@ -29,7 +29,7 @@ on:
         default: true
       dry-run:
         type: boolean
-        description: "Dry run mode (default: false)"
+        description: "Dry run mode (do not push Docker images)"
         default: false
 
 permissions:
