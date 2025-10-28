@@ -48,7 +48,6 @@ jobs:
       FULL_MGM_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/qubership-rabbitmq-management:${{ inputs.tag }}
 
     steps:
-      # --- Исходники RabbitMQ ---
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
@@ -69,6 +68,7 @@ jobs:
       - name: Cleanup workspace
         run: rm -rf ./*
 
+        # --- Исходники RabbitMQ ---
       - name: Checkout RabbitMQ source
         uses: actions/checkout@v5
         with:
