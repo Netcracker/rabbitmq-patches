@@ -27,10 +27,7 @@ on:
         type: boolean
         description: "Override tag name (default: true)"
         default: true
-      dry-run:
-        type: boolean
-        description: "Dry run mode (do not push Docker images)"
-        default: false
+
 
 permissions:
   contents: write
@@ -200,7 +197,6 @@ jobs:
           context: docker-library/${{ inputs.docker-library-rabbitmq }}/alpine
           file: docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: ${{ inputs.dry-run != 'true' }}
           tags: ${{env.FULL_BASE_IMAGE_NAME }}
           build-args: |
             RABBITMQ_SOURCE_URL=./rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz
@@ -212,7 +208,6 @@ jobs:
           context: docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management
           file: docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management/Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: ${{ inputs.dry-run != 'true' }}
           tags: ${{env.FULL_MGM_IMAGE_NAME }}
           build-args: |
             BASE_IMAGE=${{ env.FULL_BASE_IMAGE_NAME }}
