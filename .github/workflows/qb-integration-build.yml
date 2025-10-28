@@ -69,16 +69,16 @@ jobs:
         run: rm -rf ./*
 
       - name: Checkout RabbitMQ source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: rabbitmq/rabbitmq-server
           ref: ${{ inputs.rabbitmq-tag }}
 
-      - name: Checkout rabbitmq-patches
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag }}
-          path: rabbitmq-patches
+      # - name: Checkout rabbitmq-patches
+      #   uses: actions/checkout@v5
+      #   with:
+      #     ref: ${{ inputs.tag }}
+      #     path: rabbitmq-patches
 
       - name: Apply patches
         run: |
@@ -126,10 +126,10 @@ jobs:
           cd docker-library
           echo "::group::🧩 Patching Dockerfile-alpine.template"
 
-          # Добавляем ARG для локального источника
+          # Добавляем ARG
           sed -i '/# Use the latest stable RabbitMQ release/a ARG RABBITMQ_SOURCE_URL=""' Dockerfile-alpine.template
 
-          # Вставляем условие для локального пакета, но только внутри секции RabbitMQ
+          # Вставляем условие, но только внутри секции RabbitMQ
           awk '
             BEGIN {in_rmq=0}
             /# Use the latest stable RabbitMQ release/ {in_rmq=1}
@@ -194,7 +194,8 @@ jobs:
         with:
           context: docker-library/${{ inputs.docker-library-rabbitmq }}/alpine
           file: docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          # platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{env.FULL_BASE_IMAGE_NAME }}
           build-args: |
@@ -206,14 +207,15 @@ jobs:
         with:
           context: docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management
           file: docker-library/${{ inputs.docker-library-rabbitmq }}/alpine/management/Dockerfile
-          platforms: linux/amd64,linux/arm64
+          # platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{env.FULL_MGM_IMAGE_NAME }}
           build-args: |
             BASE_IMAGE=${{ env.FULL_BASE_IMAGE_NAME }}
           provenance: false
 
-      # --- Проверка образов ---
+      # --- Test docker images ---
       - name: Test RabbitMQ base image
         run: |
           docker run -d --rm --name test-rabbit -p 5672:5672 ${{ env.FULL_BASE_IMAGE_NAME }}
