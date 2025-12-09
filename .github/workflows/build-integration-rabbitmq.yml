@@ -23,6 +23,10 @@ on:
         description: "Repository to send the custom event to"
         required: false
         default: "qubership-rabbitmq"
+      event-target-branch:
+        description: "Branch in the target repository to send the event to"
+        required: false
+        default: "main"
       forceCreate:
         type: boolean
         description: "Override tag name (default: true)"
@@ -242,7 +246,8 @@ jobs:
                "patchedTag": "${{ env.RABBITMQ_TAG }}",
                "repo": "${{ github.repository }}",
                "owner": "${{ github.repository_owner }}",
-               "forceCreate": "${{ inputs.forceCreate }}"
+               "target_branch": "${{ inputs.event-target-branch || github.ref_name }}",
+               "forceCreate": "${{ inputs.forceCreate }}",
             }
           owner: "${{ github.repository_owner }}"
           repo: "${{ env.EVENT_TARGET_REPO }}"
