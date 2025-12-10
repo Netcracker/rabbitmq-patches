@@ -93,6 +93,7 @@ jobs:
             git apply -p1 --ignore-space-change --ignore-whitespace "$p"
           done
           rm -rf ./rabbitmq-patches
+          echo "REPOSITORY_OWNER_LC=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
 
       - name: Install build prerequisites
         run: |
@@ -243,12 +244,12 @@ jobs:
                "base_image": "${{ env.FULL_BASE_IMAGE_NAME}}",
                "management_image": "${{ env.FULL_MGM_IMAGE_NAME}}",
                "tag": "${{ env.TAG }}",
-               "patchedTag": "${{ env.RABBITMQ_TAG }}",
+               "patched_tag": "${{ env.RABBITMQ_TAG }}",
                "repo": "${{ github.repository }}",
-               "owner": "${{ github.repository_owner }}",
+               "owner": "${{ env.REPOSITORY_OWNER_LC }}",
                "target_branch": "${{ inputs.event-target-branch || github.ref_name }}",
-               "forceCreate": "${{ inputs.forceCreate }}",
+               "force_ccreate": "${{ inputs.forceCreate }}"
             }
-          owner: "${{ github.repository_owner }}"
+          owner: "${{ env.REPOSITORY_OWNER_LC }}"
           repo: "${{ env.EVENT_TARGET_REPO }}"
           github-token: ${{ secrets.GH_ACCESS_TOKEN }}
