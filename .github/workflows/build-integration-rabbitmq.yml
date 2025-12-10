@@ -132,10 +132,8 @@ jobs:
           cd docker-library
           echo "::group::🧩 Patching Dockerfile-alpine.template"
 
-          # Добавляем ARG
           sed -i '/# Use the latest stable RabbitMQ release/a ARG RABBITMQ_SOURCE_URL=""' Dockerfile-alpine.template
 
-          # Вставляем условие, но только внутри секции RabbitMQ
           awk '
             BEGIN {in_rmq=0}
             /# Use the latest stable RabbitMQ release/ {in_rmq=1}
