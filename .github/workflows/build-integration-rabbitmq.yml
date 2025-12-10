@@ -117,7 +117,7 @@ jobs:
           echo "=== TAR content ==="
           tar -tf PACKAGES/rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz | grep sbin/ || echo "No sbin found"
 
-      # --- Dockerfile генерация и патчинг ---
+      # --- Dockerfile generation and patch ---
       - name: Checkout docker-library/rabbitmq
         uses: actions/checkout@v5
         with:
