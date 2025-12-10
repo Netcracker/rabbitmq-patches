@@ -53,7 +53,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -92,7 +92,6 @@ jobs:
             git apply -p1 --ignore-space-change --ignore-whitespace "$p"
           done
           rm -rf ./rabbitmq-patches
-          echo "REPOSITORY_OWNER_LC=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
 
       - name: Install build prerequisites
         run: |
@@ -132,8 +131,10 @@ jobs:
           cd docker-library
           echo "::group::🧩 Patching Dockerfile-alpine.template"
 
+          # Добавляем ARG
           sed -i '/# Use the latest stable RabbitMQ release/a ARG RABBITMQ_SOURCE_URL=""' Dockerfile-alpine.template
 
+          # Вставляем условие, но только внутри секции RabbitMQ
           awk '
             BEGIN {in_rmq=0}
             /# Use the latest stable RabbitMQ release/ {in_rmq=1}
@@ -233,7 +234,7 @@ jobs:
           docker stop test-rabbit-mgmt
 
       - name: Trigger custom event
-        uses: netcracker/qubership-workflow-hub/actions/custom-event@v2.0.1
+        uses: netcracker/qubership-workflow-hub/actions/custom-event@v2.0.5
         with:
           event-type: "integration-rabbit-built"
           client-payload: |
@@ -241,12 +242,12 @@ jobs:
                "base_image": "${{ env.FULL_BASE_IMAGE_NAME}}",
                "management_image": "${{ env.FULL_MGM_IMAGE_NAME}}",
                "tag": "${{ env.TAG }}",
-               "patched_tag": "${{ env.RABBITMQ_TAG }}",
+               "patchedTag": "${{ env.RABBITMQ_TAG }}",
                "repo": "${{ github.repository }}",
-               "owner": "${{ env.REPOSITORY_OWNER_LC }}",
+               "owner": "${{ github.repository_owner }}",
                "target_branch": "${{ inputs.event-target-branch || github.ref_name }}",
-               "force_ccreate": "${{ inputs.forceCreate }}"
+               "forceCreate": "${{ inputs.forceCreate }}"
             }
-          owner: "${{ env.REPOSITORY_OWNER_LC }}"
+          owner: "${{ github.repository_owner }}"
           repo: "${{ env.EVENT_TARGET_REPO }}"
           github-token: ${{ secrets.GH_ACCESS_TOKEN }}
