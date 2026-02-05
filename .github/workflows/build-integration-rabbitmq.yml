@@ -211,6 +211,7 @@ jobs:
           build-args: |
             RABBITMQ_SOURCE_URL=./rabbitmq-server-generic-unix-${{ inputs.rabbitmq-tag }}.tar.xz
           provenance: false
+          push: true
 
       - name: Build management Docker image
         uses: docker/build-push-action@v6
