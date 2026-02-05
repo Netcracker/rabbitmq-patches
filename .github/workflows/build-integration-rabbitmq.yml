@@ -44,14 +44,21 @@ jobs:
       RABBITMQ_TAG: ${{ inputs.rabbitmq-tag }}
       TAG: ${{ inputs.tag }}
       DOCKER_LIBRARY_RABBITMQ: ${{ inputs.docker-library-rabbitmq }}
-      IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+      # IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
       BASE_IMAGE_NAME: qubership-rabbitmq-base
       MGMT_IMAGE_NAME: qubership-rabbitmq-management
       EVENT_TARGET_REPO: ${{ inputs.event-target-repo }}
-      FULL_BASE_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/qubership-rabbitmq-base:${{ inputs.tag }}
-      FULL_MGM_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/qubership-rabbitmq-management:${{ inputs.tag }}
+      # FULL_BASE_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/qubership-rabbitmq-base:${{ inputs.tag }}
+      # FULL_MGM_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/qubership-rabbitmq-management:${{ inputs.tag }}
 
     steps:
+      - name: Set environment
+        run: |
+          IMAGE_REGISTRY="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          echo "IMAGE_REGISTRY=${IMAGE_REGISTRY}" >> $GITHUB_ENV
+          echo "FULL_BASE_IMAGE_NAME=${IMAGE_REGISTRY}/qubership-rabbitmq-base:${TAG}" >> $GITHUB_ENV
+          echo "FULL_MGM_IMAGE_NAME=${IMAGE_REGISTRY}/qubership-rabbitmq-management:${TAG}" >> $GITHUB_ENV
+
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
