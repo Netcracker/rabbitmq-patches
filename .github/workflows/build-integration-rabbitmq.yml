@@ -223,6 +223,7 @@ jobs:
           build-args: |
             BASE_IMAGE=${{ env.FULL_BASE_IMAGE_NAME }}
           provenance: false
+          push: true
 
       # --- Test docker images ---
       - name: Test RabbitMQ base image
