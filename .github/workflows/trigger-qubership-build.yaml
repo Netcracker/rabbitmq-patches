@@ -1,0 +1,72 @@
+name: "Trigger Qubership RabbitMQ build"
+run-name: "RabbitMQ ${{ inputs.rabbitmq-tag || 'v4.1.2' }} -> Release ${{ inputs.tag || 'v4.1.2-patched' }} (docker-lib: ${{ inputs.docker-library-rabbitmq || '4.1' }})"
+
+on:
+  workflow_dispatch:
+    inputs:
+      rabbitmq-tag:
+        description: "RabbitMQ version to build"
+        required: true
+        default: "v4.1.2"
+      tag:
+        description: "Tag for release and Docker images"
+        required: true
+        default: "v4.1.2-patched"
+      docker-library-rabbitmq:
+        description: "RabbitMQ docker-library version"
+        required: true
+        type: choice
+        options:
+          - "4.1"
+          - "4.2"
+      event-target-repo:
+        description: "Repository to send the custom event to"
+        required: false
+        default: "qubership-rabbitmq"
+      event-target-branch:
+        description: "Branch in the target repository to send the event to"
+        required: false
+        default: "main"
+      forceCreate:
+        type: boolean
+        description: "Override tag name (default: true)"
+        default: true
+jobs:
+  trigger:
+    name: Trigger Qubership RabbitMQ build
+    runs-on: ubuntu-latest
+    env:
+      RABBITMQ_TAG: ${{ inputs.rabbitmq-tag || 'v4.1.2' }}
+      TAG: ${{ inputs.tag || 'v4.1.2-patched' }}
+      DOCKER_LIBRARY_RABBITMQ: ${{ inputs.docker-library-rabbitmq || '4.1' }}
+      BASE_IMAGE_NAME: qubership-rabbitmq-base
+      MGMT_IMAGE_NAME: qubership-rabbitmq-management
+      EVENT_TARGET_REPO: ${{ inputs.event-target-repo || 'qubership-rabbitmq' }}
+      FORCE_CREATE: ${{ inputs.forceCreate || 'true' }}
+      EVENT_TARGET_BRANCH: ${{ inputs.event-target-branch || 'main' }}
+    steps:
+      - name: Set environment
+        run: |
+          IMAGE_REGISTRY="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          echo "IMAGE_REGISTRY=${IMAGE_REGISTRY}" >> $GITHUB_ENV
+          echo "FULL_BASE_IMAGE_NAME=${IMAGE_REGISTRY}/qubership-rabbitmq-base:${TAG}" >> $GITHUB_ENV
+          echo "FULL_MGM_IMAGE_NAME=${IMAGE_REGISTRY}/qubership-rabbitmq-management:${TAG}" >> $GITHUB_ENV
+      - name: Trigger custom event
+        uses: netcracker/qubership-workflow-hub/actions/custom-event@v2.0.5
+        with:
+          event-type: "integration-rabbit-built"
+          client-payload: |
+            {
+               "base_image": "${{ env.FULL_BASE_IMAGE_NAME}}",
+               "management_image": "${{ env.FULL_MGM_IMAGE_NAME}}",
+               "tag": "${{ env.TAG }}",
+               "rabbitmqTag": "${{ env.RABBITMQ_TAG }}",
+               "repo": "${{ github.repository }}",
+               "owner": "${{ github.repository_owner }}",
+               "target_branch": "${{ env.EVENT_TARGET_BRANCH }}",
+               "forceCreate": "${{ env.FORCE_CREATE }}"
+            }
+          owner: "${{ github.repository_owner }}"
+          repo: "${{ env.EVENT_TARGET_REPO }}"
+          github-token: ${{ secrets.GH_ACCESS_TOKEN }}
+        
