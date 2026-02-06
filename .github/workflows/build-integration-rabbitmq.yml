@@ -251,7 +251,7 @@ jobs:
                "base_image": "${{ env.FULL_BASE_IMAGE_NAME}}",
                "management_image": "${{ env.FULL_MGM_IMAGE_NAME}}",
                "tag": "${{ env.TAG }}",
-               "patchedTag": "${{ env.RABBITMQ_TAG }}",
+               "rabbitmqTag": "${{ env.RABBITMQ_TAG }}",
                "repo": "${{ github.repository }}",
                "owner": "${{ github.repository_owner }}",
                "target_branch": "${{ inputs.event-target-branch || github.ref_name }}",
