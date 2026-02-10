@@ -1,0 +1,10 @@
+diff --git a/README.md b/README.md
+index 6ff26ed8c2..155e2522d0 100644
+--- a/README.md
++++ b/README.md
+@@ -98,3 +98,5 @@ See `AGENTS.md`.
+ ## Copyright
+ 
+ (c) 2007-2026 Broadcom. All Rights Reserved. The term “Broadcom” refers to Broadcom Inc. and/or its subsidiaries.
++
++## Additional line to test patches application
