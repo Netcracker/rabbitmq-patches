@@ -1,5 +1,5 @@
 name: "Build Integration RabbitMQ"
-run-name: "RabbitMQ ${{ inputs.rabbitmq-tag || 'v4.1.2' }} -> Release ${{ inputs.tag || 'v4.1.2-patched' }} (docker-lib: ${{ inputs.docker-library-rabbitmq || '4.1' }})"
+run-name: "RabbitMQ ${{ inputs.rabbitmq-tag || 'v4.1.8' }} -> Release ${{ inputs.tag || 'v4.1.8-patched' }} (docker-lib: ${{ inputs.docker-library-rabbitmq || '4.1' }})"
 
 on:
   workflow_dispatch:
@@ -7,11 +7,11 @@ on:
       rabbitmq-tag:
         description: "RabbitMQ version to build"
         required: true
-        default: "v4.1.2"
+        default: "v4.1.8"
       tag:
         description: "Tag for release and Docker images"
         required: true
-        default: "v4.1.2-patched"
+        default: "v4.1.8-patched"
       docker-library-rabbitmq:
         description: "RabbitMQ docker-library version"
         required: true
@@ -41,8 +41,8 @@ jobs:
   build-rabbitmq:
     runs-on: ubuntu-latest
     env:
-      RABBITMQ_TAG: ${{ inputs.rabbitmq-tag || 'v4.1.2' }}
-      TAG: ${{ inputs.tag || 'v4.1.2-patched' }}
+      RABBITMQ_TAG: ${{ inputs.rabbitmq-tag || 'v4.1.8' }}
+      TAG: ${{ inputs.tag || 'v4.1.8-patched' }}
       DOCKER_LIBRARY_RABBITMQ: ${{ inputs.docker-library-rabbitmq || '4.1' }}
       # IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
       BASE_IMAGE_NAME: qubership-rabbitmq-base
