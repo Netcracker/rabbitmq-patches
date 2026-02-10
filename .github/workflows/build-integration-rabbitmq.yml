@@ -32,7 +32,7 @@ on:
         description: "Override tag name (default: true)"
         default: true
   schedule:
-    - cron: 0 2 * * *
+    - cron: 0 0 1 * *
 
 permissions:
   contents: read
